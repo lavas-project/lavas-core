@@ -1,0 +1,15 @@
+{
+    "additionalProperties": true,
+    "required": ["globals"],
+    "properties": {
+        "globals": {
+            "description": "The entry point(s) of the compilation.",
+            "required": ["rootDir"],
+            "properties": {
+                "rootDir": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}
