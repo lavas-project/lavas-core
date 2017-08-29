@@ -31,7 +31,7 @@ Fast - Respond quickly to user interactions with silky smooth animations and no 
 function setState(store) {}
 
 export default {
-    name: 'detail-_id',
+    name: 'detail-id',
     head() {
         return {
             title: `Detail ${this.$route.params.id}`,

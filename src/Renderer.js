@@ -14,6 +14,7 @@ import {createBundleRenderer} from 'vue-server-renderer';
 
 class Renderer {
     constructor(core) {
+        this.env = core.env;
         this.config = core.config;
         this.rootDir = this.config.globals.rootDir;
         this.app = core.app;
@@ -24,10 +25,10 @@ class Renderer {
         this.readyPromise = new Promise(r => this.resolve = r);
     }
 
-    async init(clientConfig, serverConfig, env) {
+    async init(clientConfig, serverConfig) {
         this.clientConfig = clientConfig;
         this.serverConfig = serverConfig;
-        if (env === 'production') {
+        if (this.env === 'production') {
             
             let outputPath = this.config.webpack.base.output.path;
 

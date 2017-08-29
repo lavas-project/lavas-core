@@ -23,20 +23,20 @@ import SkeletonWebpackPlugin from 'vue-skeleton-webpack-plugin';
 
 import {generateRoutes} from './utils/router';
 
-const isProd = process.env.NODE_ENV === 'production';
-
 const routesTemplate = join(__dirname, './templates/routes.tpl');
 const skeletonEntryTemplate = join(__dirname, './templates/entry-skeleton.tpl');
 
 class RouteManager {
 
-    constructor(core, props = {}) {
-        this.core = core;
+    constructor(config, env, webpackConfig) {
+        this.config = config;
+        this.env = env;
+        this.webpackConfig = webpackConfig;
 
         Object.assign(this, {
-            targetDir: join(core.config.globals.rootDir, './.lavas'),
+            targetDir: join(config.globals.rootDir, './.lavas'),
             skeletonsDirname: 'skeletons'
-        }, props);
+        });
 
         this.routes = [];
 
@@ -53,7 +53,9 @@ class RouteManager {
      * @return {boolean}
      */
     shouldPrerender(path) {
-        if (!isProd) {
+        console.log(path, this.routes)
+
+        if (!this.env === 'production') {
             return false;
         }
         let matchedRoute = this.routes.find(route => route.pathRegExp.test(path));
@@ -113,18 +115,19 @@ class RouteManager {
      *
      */
     async compileMultiEntries() {
-        let config = this.core.config;
+        let {shortcuts, base} = this.config.webpack;
+        let {assetsDir, ssr} = shortcuts;
 
         // create mpa config based on client config
-        let mpaConfig = merge(this.core.webpackConfig.client(config));
+        let mpaConfig = merge(this.webpackConfig.client(this.config));
         let skeletonEntries = {};
 
         // set context and clear entries
         mpaConfig.entry = {};
-        mpaConfig.context = config.globals.rootDir;
+        mpaConfig.context = this.config.globals.rootDir;
 
         // remove vue-ssr-client plugin
-        if (config.webpack.shortcuts.ssr) {
+        if (ssr) {
             // TODO: what if vue-ssr-client-plugin is not the last one in plugins array?
             mpaConfig.plugins.pop();
         }
@@ -145,7 +148,7 @@ class RouteManager {
                 let htmlFilename = `${pagename}.html`;
 
                 // save the path of HTML file which will be used in prerender searching process
-                route.htmlPath = path.join(config.webpack.output.path, htmlFilename);
+                route.htmlPath = join(base.output.path, htmlFilename);
 
                 mpaConfig.entry[pagename] = ['./core/entry-client.js'];
 
@@ -159,7 +162,7 @@ class RouteManager {
                         collapseWhitespace: true,
                         removeAttributeQuotes: true
                     },
-                    favicon: utils.assetsPath('img/icons/favicon.ico'),
+                    favicon: join(assetsDir, 'img/icons/favicon.ico'),
                     chunksSortMode: 'dependency'
                 }));
 
@@ -171,9 +174,9 @@ class RouteManager {
         }));
 
         if (Object.keys(skeletonEntries).length) {
-            let skeletonConfig = merge(his.core.webpackConfig.server(this.core.config));
+            let skeletonConfig = merge(this.webpackConfig.server(this.config));
             // remove vue-ssr-client plugin
-            if (config.webpack.shortcuts.ssr) {
+            if (ssr) {
                 // TODO: what if vue-ssr-server-plugin is not the last one in plugins array?
                 skeletonConfig.plugins.pop();
             }
@@ -224,8 +227,7 @@ class RouteManager {
      *
      */
     async autoCompileRoutes() {
-        const config = this.core.config;
-        const routesConfig = config.router && config.router.routes || [];
+        const routesConfig = this.config.router && this.config.router.routes || [];
 
         console.log('[Lavas] auto compile routes...');
         this.routes = await generateRoutes(join(this.targetDir, '../pages'));

@@ -12,7 +12,7 @@ import LavasCore from '../../lib';
 
 let core;
 
-test.before('load config first', async t => {
+test.beforeEach('init', async t => {
     core = new LavasCore(join(__dirname, '../fixtures'));
     await core.init();
 });

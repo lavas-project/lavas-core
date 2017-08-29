@@ -5,7 +5,6 @@
 
 import {join, resolve} from 'path';
 import test from 'ava';
-import LavasCore from '../../lib';
 import ConfigValidator from '../../lib/ConfigValidator';
 
 test('it should throw validation errors when missing some required props', t => {

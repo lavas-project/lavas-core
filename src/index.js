@@ -2,6 +2,7 @@ import RouteManager from './RouteManager';
 import Renderer from './Renderer';
 import WebpackConfig from './WebpackConfig';
 import ConfigValidator from './ConfigValidator';
+import serve from 'koa-static';
 import {join} from 'path';
 import glob from 'glob';
 import _ from 'lodash';
@@ -12,19 +13,21 @@ class LavasCore {
         this.app = app;
     }
 
-    async init(env) {
-        this.config = await this.loadConfig(env || process.env.NODE_ENV);
+    async init(env = 'development') {
+        this.env = env || process.env.NODE_ENV;
+
+        this.config = await this.loadConfig();
 
         ConfigValidator.validate(this.config);
 
-        this.webpackConfig = new WebpackConfig(this.config);
+        this.webpackConfig = new WebpackConfig(this.config, this.env);
 
-        this.routeManager = new RouteManager(this);
+        this.routeManager = new RouteManager(this.config, this.env, this.webpackConfig);
 
         this.renderer = new Renderer(this);
     }
 
-    async loadConfig(env = 'development') {
+    async loadConfig() {
         const config = {};
         let configDir = join(this.cwd, 'config');
         let files = glob.sync(
@@ -59,23 +62,50 @@ class LavasCore {
         let temp = config.env || {};
 
         // merge config according env
-        if (temp[env]) {
-            _.merge(config, temp[env]);
+        if (temp[this.env]) {
+            _.merge(config, temp[this.env]);
         }
 
         return config;
     }
 
-    async build(env = 'development') {
+    async build() {
         await this.routeManager.autoCompileRoutes();
 
-        let clientConfig = this.webpackConfig.client(this.config, env);
-        let serverConfig = this.webpackConfig.server(this.config, env);
-        await this.renderer.init(clientConfig, serverConfig, env);
+        let clientConfig = this.webpackConfig.client(this.config);
+        let serverConfig = this.webpackConfig.server(this.config);
+        await this.renderer.init(clientConfig, serverConfig);
+
+        await this.routeManager.compileMultiEntries();
+
+        this.setupMiddlewares();
     }
 
-    koaMiddleware(context, next) {
+    setupMiddlewares() {
+        if (this.app) {
+            this.app.use(serve(this.config.webpack.base.output.path));
+        }
+    }
 
+    async koaMiddleware(ctx, next) {
+
+        if (this.routeManager.shouldPrerender(ctx.path)) {
+            ctx.body = await this.routeManager.prerender(ctx.path);
+        }
+        else {
+            let renderer = await this.renderer.getRenderer();
+
+            ctx.body = await new Promise((resolve, reject) => {
+                // render to string
+                renderer.renderToString(ctx, (err, html) => {
+                    if (err) {
+                        return reject(err);
+                    }
+
+                    resolve(html);
+                });
+            });
+        }
     }
 }
 

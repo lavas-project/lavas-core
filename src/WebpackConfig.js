@@ -18,16 +18,17 @@ import VueSSRServerPlugin from 'vue-server-renderer/server-plugin';
 import {vueLoaders, styleLoaders} from './utils/loader';
 
 class WebpackConfig {
-    constructor(config = {}) {
+    constructor(config = {}, env) {
         this.config = config;
+        this.env = env;
     }
 
     assetsPath(newPath) {
         return posix.join(this.config.webpack.shortcuts.assetsDir, newPath);
     }
 
-    base(config, env = 'development') {
-        let isProd = env === 'production';
+    base(config) {
+        let isProd = this.env === 'production';
         let {globals, webpack: webpackConfig, babel} = config;
         let {base, shortcuts, mergeStrategy = {}, build} = webpackConfig;
         let {cssSourceMap, cssMinimize, cssExtract, jsSourceMap} = shortcuts;
@@ -54,9 +55,14 @@ class WebpackConfig {
                     },
                     {
                         test: /\.js$/,
-                        loader: 'babel-loader',
-                        exclude: /node_modules/,
-                        query: babel
+                        use: {
+                            loader: 'babel-loader',
+                            options: {
+                                presets: babel.presets,
+                                plugins: babel.plugins
+                            }
+                        },
+                        exclude: /node_modules/
                     },
                     {
                         test: /\.(png|jpe?g|gif|svg)(\?.*)?$/,
@@ -103,13 +109,13 @@ class WebpackConfig {
         return baseConfig;
     }
 
-    client(config, env = 'development') {
+    client(config) {
         let {globals, webpack: webpackConfig} = config;
         let {base, client, shortcuts, mergeStrategy = {}, build} = webpackConfig;
         let {ssr, cssSourceMap, cssMinimize, cssExtract,
             jsSourceMap, assetsDir, copyDir} = shortcuts;
 
-        let baseConfig = this.base(config, env);
+        let baseConfig = this.base(config);
         let clientConfig = merge.strategy(mergeStrategy)(baseConfig, {
             output: {
                 filename: this.assetsPath(baseConfig.output.filename),
@@ -127,7 +133,7 @@ class WebpackConfig {
                 // http://vuejs.github.io/vue-loader/en/workflow/production.html
                 new webpack.DefinePlugin({
                     'process.env.VUE_ENV': '"client"',
-                    'process.env.NODE_ENV': `"${env}"`
+                    'process.env.NODE_ENV': `"${this.env}"`
                 }),
 
                 // split vendor js into its own file
@@ -180,11 +186,11 @@ class WebpackConfig {
         return clientConfig;
     }
 
-    server(config, env = 'development') {
+    server(config) {
         let {webpack: webpackConfig} = config;
         let {base, server, mergeStrategy = {}, build} = webpackConfig;
 
-        let baseConfig = this.base(config, env);
+        let baseConfig = this.base(config);
         let serverConfig = merge.strategy(mergeStrategy)(baseConfig, {
             target: 'node',
             output: {
@@ -201,7 +207,7 @@ class WebpackConfig {
             plugins: [
                 new webpack.DefinePlugin({
                     'process.env.VUE_ENV': '"server"',
-                    'process.env.NODE_ENV': `"${env}"`
+                    'process.env.NODE_ENV': `"${this.env}"`
                 }),
                 new VueSSRServerPlugin()
             ]
