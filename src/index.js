@@ -1,4 +1,5 @@
-// import RouteManager from './RouteManager';
+import RouteManager from './RouteManager';
+import Renderer from './Renderer';
 import WebpackConfig from './WebpackConfig';
 import ConfigValidator from './ConfigValidator';
 import {join} from 'path';
@@ -6,18 +7,21 @@ import glob from 'glob';
 import _ from 'lodash';
 
 class LavasCore {
-    constructor(cwd = process.cwd()) {
+    constructor(cwd = process.cwd(), app) {
         this.cwd = cwd;
+        this.app = app;
     }
 
-    async init() {
-        this.config = await this.loadConfig(process.env.NODE_ENV);
+    async init(env) {
+        this.config = await this.loadConfig(env || process.env.NODE_ENV);
 
         ConfigValidator.validate(this.config);
 
         this.webpackConfig = new WebpackConfig(this.config);
 
-        // this.routeManager = new RouteManager(this);
+        this.routeManager = new RouteManager(this);
+
+        this.renderer = new Renderer(this);
     }
 
     async loadConfig(env = 'development') {
@@ -60,6 +64,14 @@ class LavasCore {
         }
 
         return config;
+    }
+
+    async build(env = 'development') {
+        await this.routeManager.autoCompileRoutes();
+
+        let clientConfig = this.webpackConfig.client(this.config, env);
+        let serverConfig = this.webpackConfig.server(this.config, env);
+        await this.renderer.init(clientConfig, serverConfig, env);
     }
 
     koaMiddleware(context, next) {

@@ -17,8 +17,6 @@ import VueSSRServerPlugin from 'vue-server-renderer/server-plugin';
 
 import {vueLoaders, styleLoaders} from './utils/loader';
 
-const isProd = process.env.NODE_ENV === 'production';
-
 class WebpackConfig {
     constructor(config = {}) {
         this.config = config;
@@ -28,9 +26,10 @@ class WebpackConfig {
         return posix.join(this.config.webpack.shortcuts.assetsDir, newPath);
     }
 
-    base(config) {
-        let {globals, webpack, babel} = config;
-        let {base, shortcuts, mergeStrategy = {}, build} = webpack;
+    base(config, env = 'development') {
+        let isProd = env === 'production';
+        let {globals, webpack: webpackConfig, babel} = config;
+        let {base, shortcuts, mergeStrategy = {}, build} = webpackConfig;
         let {cssSourceMap, cssMinimize, cssExtract, jsSourceMap} = shortcuts;
 
         let baseConfig = merge.strategy(mergeStrategy)({
@@ -104,13 +103,13 @@ class WebpackConfig {
         return baseConfig;
     }
 
-    client(config) {
+    client(config, env = 'development') {
         let {globals, webpack: webpackConfig} = config;
         let {base, client, shortcuts, mergeStrategy = {}, build} = webpackConfig;
         let {ssr, cssSourceMap, cssMinimize, cssExtract,
             jsSourceMap, assetsDir, copyDir} = shortcuts;
 
-        let baseConfig = this.base(config);
+        let baseConfig = this.base(config, env);
         let clientConfig = merge.strategy(mergeStrategy)(baseConfig, {
             output: {
                 filename: this.assetsPath(baseConfig.output.filename),
@@ -128,7 +127,7 @@ class WebpackConfig {
                 // http://vuejs.github.io/vue-loader/en/workflow/production.html
                 new webpack.DefinePlugin({
                     'process.env.VUE_ENV': '"client"',
-                    'process.env.NODE_ENV': `"${process.env.NODE_ENV}"`
+                    'process.env.NODE_ENV': `"${env}"`
                 }),
 
                 // split vendor js into its own file
@@ -138,7 +137,7 @@ class WebpackConfig {
                         // any required modules inside node_modules are extracted to vendor
                         return module.resource
                             && /\.js$/.test(module.resource)
-                            && module.resource.indexOf(join(globals.rootDir, 'node_modules')) === 0;
+                            && module.resource.indexOf('node_modules') >= 0;
                     }
                 }),
 
@@ -181,11 +180,11 @@ class WebpackConfig {
         return clientConfig;
     }
 
-    server(config) {
+    server(config, env = 'development') {
         let {webpack: webpackConfig} = config;
         let {base, server, mergeStrategy = {}, build} = webpackConfig;
 
-        let baseConfig = this.base(config);
+        let baseConfig = this.base(config, env);
         let serverConfig = merge.strategy(mergeStrategy)(baseConfig, {
             target: 'node',
             output: {
@@ -202,7 +201,7 @@ class WebpackConfig {
             plugins: [
                 new webpack.DefinePlugin({
                     'process.env.VUE_ENV': '"server"',
-                    'process.env.NODE_ENV': `"${process.env.NODE_ENV}"`
+                    'process.env.NODE_ENV': `"${env}"`
                 }),
                 new VueSSRServerPlugin()
             ]

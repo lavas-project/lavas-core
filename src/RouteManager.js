@@ -113,9 +113,10 @@ class RouteManager {
      *
      */
     async compileMultiEntries() {
+        let config = this.core.config;
 
         // create mpa config based on client config
-        let mpaConfig = merge(this.core.webpackConfig.client(this.core.config));
+        let mpaConfig = merge(this.core.webpackConfig.client(config));
         let skeletonEntries = {};
 
         // set context and clear entries
@@ -123,7 +124,7 @@ class RouteManager {
         mpaConfig.context = config.globals.rootDir;
 
         // remove vue-ssr-client plugin
-        if (config.ssr.enable) {
+        if (config.webpack.shortcuts.ssr) {
             // TODO: what if vue-ssr-client-plugin is not the last one in plugins array?
             mpaConfig.plugins.pop();
         }
@@ -172,7 +173,7 @@ class RouteManager {
         if (Object.keys(skeletonEntries).length) {
             let skeletonConfig = merge(his.core.webpackConfig.server(this.core.config));
             // remove vue-ssr-client plugin
-            if (config.ssr.enable) {
+            if (config.webpack.shortcuts.ssr) {
                 // TODO: what if vue-ssr-server-plugin is not the last one in plugins array?
                 skeletonConfig.plugins.pop();
             }
@@ -223,10 +224,11 @@ class RouteManager {
      *
      */
     async autoCompileRoutes() {
-        const routesConfig = config.router.routes;
+        const config = this.core.config;
+        const routesConfig = config.router && config.router.routes || [];
 
         console.log('[Lavas] auto compile routes...');
-        this.routes = await generateRoutes(path.resolve(__dirname, '../pages'));
+        this.routes = await generateRoutes(join(this.targetDir, '../pages'));
 
         this.routes.forEach(route => {
             // find route in config

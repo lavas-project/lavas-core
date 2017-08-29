@@ -89,6 +89,11 @@ module.exports = {
          */
         jsSourceMap: true,
 
+        /**
+         * if need ssr
+         *
+         * @type {boolean}
+         */
         ssr: true
     }
 

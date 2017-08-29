@@ -7,3 +7,5 @@ package-lock.json
 lib
 coverage
 .nyc_output
+test/fixtures/dist/
+test/fixtures/.lavas/

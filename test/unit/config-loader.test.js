@@ -90,7 +90,7 @@ test('it should use a build function to modify webpack client config directly', 
         webpack: {
             build(webpackConfig, {type}) {
                 if (type === 'client') {
-                    webpackConfig.plugins.push('NewCustomPlugin');
+                    webpackConfig.plugins.push('NewClientCustomPlugin');
                 }
             }
         }
@@ -98,7 +98,7 @@ test('it should use a build function to modify webpack client config directly', 
 
     let clientConfig = core.webpackConfig.client(config);
 
-    t.is(clientConfig.plugins[clientConfig.plugins.length - 1], 'NewCustomPlugin');
+    t.is(clientConfig.plugins[clientConfig.plugins.length - 1], 'NewClientCustomPlugin');
 });
 
 test('it should use a build function to modify webpack server config directly', async t => {
@@ -106,7 +106,7 @@ test('it should use a build function to modify webpack server config directly', 
         webpack: {
             build(webpackConfig, {type}) {
                 if (type === 'server') {
-                    webpackConfig.plugins.push('NewCustomPlugin');
+                    webpackConfig.plugins.push('NewServerCustomPlugin');
                 }
             }
         }
@@ -114,5 +114,5 @@ test('it should use a build function to modify webpack server config directly', 
 
     let serverConfig = core.webpackConfig.server(config);
 
-    t.is(serverConfig.plugins[serverConfig.plugins.length - 1], 'NewCustomPlugin');
+    t.is(serverConfig.plugins[serverConfig.plugins.length - 1], 'NewServerCustomPlugin');
 });
