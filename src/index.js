@@ -1,3 +1,4 @@
+import 'babel-polyfill';
 import RouteManager from './RouteManager';
 import Renderer from './Renderer';
 import WebpackConfig from './WebpackConfig';
@@ -76,7 +77,10 @@ class LavasCore {
         let serverConfig = this.webpackConfig.server(this.config);
         await this.renderer.init(clientConfig, serverConfig);
 
-        await this.routeManager.compileMultiEntries();
+        // compile multi entries in production mode
+        if (this.env === 'production') {
+            await this.routeManager.compileMultiEntries();
+        }
 
         this.setupMiddlewares();
     }
