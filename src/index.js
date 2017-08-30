@@ -1,4 +1,3 @@
-import 'babel-polyfill';
 import RouteManager from './RouteManager';
 import Renderer from './Renderer';
 import WebpackConfig from './WebpackConfig';

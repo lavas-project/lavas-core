@@ -1,6 +1,6 @@
 {
   "name": "lavas-core",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "",
   "author": "lavas",
   "main": "lib/index.js",
@@ -69,6 +69,7 @@
     "nyc": "^10.3.2",
     "stylus": "^0.54.5",
     "stylus-loader": "^3.0.1",
+    "superkoa": "^1.0.3",
     "vue": "^2.4.2",
     "vue-loader": "^13.0.4",
     "vue-meta": "^1.0.5",
