@@ -8,6 +8,12 @@
 module.exports = {
 
     webpack: {
+        base: {
+            output: {
+                publicPath: '/dist/',
+                filename: 'js/[name].[hash:8].js'
+            }
+        },
         shortcuts: {
             cssExtract: false
         }

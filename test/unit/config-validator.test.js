@@ -29,6 +29,13 @@ test('it should throw validation errors when the prop\'s type is invalid', t => 
     let config = {
         globals: {
             rootDir: false
+        },
+        webpack: {
+            base: {
+                output: {
+                    path: 123
+                }
+            }
         }
     };
     let error = t.throws(() => {

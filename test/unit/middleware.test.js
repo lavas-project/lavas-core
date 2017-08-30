@@ -11,52 +11,100 @@ import {readFile, existsSync} from 'fs-extra';
 import Koa from 'koa';
 import superkoa from 'superkoa';
 
-let app = new Koa();
-
+let app;
+let server;
 let port = process.env.PORT || 3000;
-app.listen(port, () => {
-    console.log('server started at localhost:' + port);
-});
-
 let core;
 
 test.beforeEach('init in production mode', async t => {
+    app = new Koa();
+    server = app.listen(port, () => {
+        console.log('server started at localhost:' + port);
+    });
     core = new LavasCore(join(__dirname, '../fixtures'), app);
-    await core.init('production');
 });
 
-// test.serial('it should use koa middleware in production mode correctly', async t => {
-//     let webpackConfig = core.config.webpack;
-//     let outputPath = webpackConfig.base.output.path;
-//     let {assetsDir, copyDir} = webpackConfig.shortcuts;
+test.afterEach('clean', t => {
+    server.close();
+});
 
-//     let ssrContent = '<div id="app" data-server-rendered="true">';
+test.serial('it should run in development mode correctly', async t => {
 
-//     await core.build();
+    await core.init('development');
 
-//     // use middleware
-//     app.use(core.koaMiddleware.bind(core));
+    let webpackConfig = core.config.webpack;
+    let outputPath = webpackConfig.base.output.path;
+    let {assetsDir, copyDir} = webpackConfig.shortcuts;
 
-//     // index
-//     let res = await superkoa(app)
-//         .get('/');
-//     t.is(200, res.status);
-//     t.true(res.text.indexOf(ssrContent) > -1);
+    let ssrContent = '<div id="app" data-server-rendered="true">';
 
-//     // server side render route /detail/1
-//     res = await superkoa(app)
-//         .get('/detail/1');
-//     t.is(200, res.status);
-//     t.true(res.text.indexOf(ssrContent) > -1);
+    // title injected by vue-meta
+    let homeTitle = '<title data-vue-meta="true">Home - Lavas</title>';
+    let detailTitle = '<title data-vue-meta="true">Detail 1 - Lavas</title>';
 
-//     // serve static assets such as manifest.json
-//     res = await superkoa(app)
-//         .get('/static/manifest.json');
-//     t.is(200, res.status);
-//     t.is(res.text, await readFile(join(copyDir, 'manifest.json'), 'utf8'));
-// });
+    await core.build();
 
-test.serial('it should prerender in production mode correctly', async t => {
+    app.use(core.koaMiddleware.bind(core));
+
+    // server side render index
+    let res = await superkoa(app)
+        .get('/');
+    t.is(200, res.status);
+    t.true(res.text.indexOf(ssrContent) > -1);
+    t.true(res.text.indexOf(homeTitle) > -1);
+
+    // server side render /detail/:id
+    res = await superkoa(app)
+        .get('/detail/1');
+    t.is(200, res.status);
+    t.true(res.text.indexOf(ssrContent) > -1);
+    t.true(res.text.indexOf(detailTitle) > -1);
+
+    // serve static assets such as manifest.json
+    res = await superkoa(app)
+        .get('/dist/static/manifest.json');
+    t.is(200, res.status);
+    t.is(res.text, await readFile(join(copyDir, 'manifest.json'), 'utf8'));
+});
+
+test.serial('it should use koa middleware in production mode correctly', async t => {
+
+    await core.init('production');
+
+    let webpackConfig = core.config.webpack;
+    let outputPath = webpackConfig.base.output.path;
+    let {assetsDir, copyDir} = webpackConfig.shortcuts;
+
+    let ssrContent = '<div id="app" data-server-rendered="true">';
+
+    await core.build();
+
+    // use middleware
+    app.use(core.koaMiddleware.bind(core));
+
+    // index
+    let res = await superkoa(app)
+        .get('/');
+    t.is(200, res.status);
+    t.true(res.text.indexOf(ssrContent) > -1);
+
+    // server side render route /detail/1
+    res = await superkoa(app)
+        .get('/detail/1');
+    t.is(200, res.status);
+    t.true(res.text.indexOf(ssrContent) > -1);
+
+    // serve static assets such as manifest.json
+    res = await superkoa(app)
+        .get('/static/manifest.json');
+    t.is(200, res.status);
+    t.is(res.text, await readFile(join(copyDir, 'manifest.json'), 'utf8'));
+});
+
+test.serial('it should prerender and generate skeleton correctly', async t => {
+
+    await core.init('production');
+
     let webpackConfig = core.config.webpack;
     let outputPath = webpackConfig.base.output.path;
     let {assetsDir, copyDir} = webpackConfig.shortcuts;
@@ -98,7 +146,7 @@ test.serial('it should prerender in production mode correctly', async t => {
     t.is(200, res.status);
     t.true(res.text.indexOf(ssrContent) === -1);
     t.true(res.text.indexOf(skeletonInlineStyle) > -1);
-    t.true(res.text.indexOf(skeletonContent) > -1);
+    t.true(res.text.indexOf(skeletonDomContent) > -1);
 
     // serve static assets such as manifest.json
     res = await superkoa(app)

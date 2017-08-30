@@ -16,10 +16,10 @@
     "test": "npm run build && ./node_modules/.bin/nyc ava"
   },
   "ava": {
-    "concurrency": 5,
+    "concurrency": 1,
     "failFast": true,
     "files": [
-      "test/unit/middleware.test.js"
+      "test/unit/*.test.js"
     ],
     "require": [
       "babel-register"
@@ -68,7 +68,6 @@
     "babel-register": "^6.23.0",
     "fecs": "^1.4.0",
     "nyc": "^10.3.2",
-    "superkoa": "^1.0.3",
     "vue": "^2.4.2",
     "vue-loader": "^13.0.4",
     "vue-meta": "^1.0.5",

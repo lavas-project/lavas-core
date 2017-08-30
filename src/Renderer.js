@@ -97,6 +97,7 @@ class Renderer {
         let clientManifest;
         let clientConfig = this.clientConfig;
 
+        clientConfig.context = this.rootDir;
         clientConfig.entry.app = ['webpack-hot-middleware/client', ...clientConfig.entry.app];
         clientConfig.plugins.push(
             new webpack.HotModuleReplacementPlugin(),
@@ -150,6 +151,7 @@ class Renderer {
      */
     getServerBundle(callback) {
         let serverConfig = this.serverConfig;
+        serverConfig.context = this.rootDir;
 
         // watch and update server renderer
         const serverCompiler = webpack(serverConfig);

@@ -53,8 +53,6 @@ class RouteManager {
      * @return {boolean}
      */
     shouldPrerender(path) {
-        console.log(path, this.routes)
-
         if (!this.env === 'production') {
             return false;
         }
