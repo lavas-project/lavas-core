@@ -1,115 +1,100 @@
+/**
+ * @file index.js
+ * @author lavas
+ */
 import RouteManager from './RouteManager';
 import Renderer from './Renderer';
 import WebpackConfig from './WebpackConfig';
+import ConfigReader from './ConfigReader';
 import ConfigValidator from './ConfigValidator';
 import serve from 'koa-static';
-import {join} from 'path';
-import glob from 'glob';
-import _ from 'lodash';
+import {emptyDir} from 'fs-extra';
+import decorateContextFactory from './middlewares/decorateContext';
+import privateFileFactory from './middlewares/privateFile';
+import ssrFactory from './middlewares/ssr';
+import errorFactory from './middlewares/error';
 
-class LavasCore {
-    constructor(cwd = process.cwd(), app) {
+import Koa from 'koa';
+import compose from 'koa-compose';
+
+export default class LavasCore {
+    constructor(cwd = process.cwd()) {
         this.cwd = cwd;
-        this.app = app;
+        this.app = new Koa();
     }
 
     async init(env = 'development') {
         this.env = env || process.env.NODE_ENV;
+        this.isProd = this.env === 'production';
 
-        this.config = await this.loadConfig();
+        this.config = await ConfigReader.read(this.cwd, this.env);
 
         ConfigValidator.validate(this.config);
+
+        this.renderer = new Renderer(this);
 
         this.webpackConfig = new WebpackConfig(this.config, this.env);
 
         this.routeManager = new RouteManager(this.config, this.env, this.webpackConfig);
-
-        this.renderer = new Renderer(this);
-    }
-
-    async loadConfig() {
-        const config = {};
-        let configDir = join(this.cwd, 'config');
-        let files = glob.sync(
-            '**/*.js', {
-                cwd: configDir
-            }
-        );
-
-        // require all files and assign them to config recursively
-        await Promise.all(files.map(async filepath => {
-            filepath = filepath.substring(0, filepath.length - 3);
-
-            let paths = filepath.split('/');
-
-            let name;
-            let cur = config;
-            for (let i = 0; i < paths.length - 1; i++) {
-                name = paths[i];
-                if (!cur[name]) {
-                    cur[name] = {};
-                }
-
-                cur = cur[name];
-            }
-
-            name = paths.pop();
-
-            // load config
-            cur[name] = await import(join(configDir, filepath));
-        }));
-
-        let temp = config.env || {};
-
-        // merge config according env
-        if (temp[this.env]) {
-            _.merge(config, temp[this.env]);
-        }
-
-        return config;
     }
 
     async build() {
-        await this.routeManager.autoCompileRoutes();
+        // clear dist/
+        await emptyDir(this.config.webpack.base.output.path);
 
-        let clientConfig = this.webpackConfig.client(this.config);
-        let serverConfig = this.webpackConfig.server(this.config);
-        await this.renderer.init(clientConfig, serverConfig);
+        // build routes' info and source code
+        await this.routeManager.buildRoutes();
 
-        // compile multi entries in production mode
-        if (this.env === 'production') {
-            await this.routeManager.compileMultiEntries();
-        }
-
-        this.setupMiddlewares();
-    }
-
-    setupMiddlewares() {
-        if (this.app) {
-            this.app.use(serve(this.config.webpack.base.output.path));
-        }
-    }
-
-    async koaMiddleware(ctx, next) {
-
-        if (this.routeManager.shouldPrerender(ctx.path)) {
-            ctx.body = await this.routeManager.prerender(ctx.path);
-        }
-        else {
-            let renderer = await this.renderer.getRenderer();
-
-            ctx.body = await new Promise((resolve, reject) => {
-                // render to string
-                renderer.renderToString(ctx, (err, html) => {
-                    if (err) {
-                        return reject(err);
-                    }
-
-                    resolve(html);
-                });
+        // add extension's hooks
+        if (this.config.extensions) {
+            this.config.extensions.forEach(({name, init}) => {
+                console.log(`[Lavas] ${name} extension is running...`);
+                this.webpackConfig.addHooks(init);
             });
         }
+
+        // webpack client & server config
+        let clientConfig = this.webpackConfig.client(this.config);
+        let serverConfig = this.webpackConfig.server(this.config);
+
+        // build bundle renderer
+        await this.renderer.build(clientConfig, serverConfig);
+
+        if (this.isProd) {
+            // compile multi entries only in production mode
+            await this.routeManager.buildMultiEntries();
+            // store routes info in routes.json for later use
+            await this.routeManager.writeRoutesFile();
+        }
+    }
+
+    async runAfterBuild() {
+        // create with routes.json
+        await this.routeManager.createWithRoutesFile();
+        // create with bundle & manifest
+        await this.renderer.createWithBundle();
+    }
+
+    /**
+     * compose all the middlewares
+     *
+     * @return {Function} koa middleware
+     */
+    koaMiddleware() {
+        if (this.isProd) {
+            // add static middleware
+            this.app.use(serve(this.config.webpack.base.output.path));
+        }
+
+        return compose([
+            errorFactory(this),
+            decorateContextFactory(this),
+            privateFileFactory(this),
+            ...this.app.middleware,
+            ssrFactory(this)
+        ]);
+    }
+
+    expressMiddleware() {
     }
 }
-
-export default LavasCore;

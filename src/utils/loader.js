@@ -1,14 +1,10 @@
 /**
- * @file route manager
- * @author panyuqi
- * @desc generate route.js, multi entries in .lavas directory
+ * @file utils.loader.js
+ * @author lavas
  */
-
 import ExtractTextPlugin from 'extract-text-webpack-plugin';
 
-export {cssLoaders, styleLoaders, vueLoaders};
-
-function vueLoaders (options = {}) {
+export function vueLoaders(options = {}) {
     return {
         loaders: cssLoaders({
             sourceMap: options.cssSourceMap,
@@ -18,7 +14,7 @@ function vueLoaders (options = {}) {
     };
 }
 
-function cssLoaders (options = {}) {
+export function cssLoaders(options = {}) {
 
     let cssLoader = {
         loader: 'css-loader',
@@ -65,10 +61,10 @@ function cssLoaders (options = {}) {
         stylus: generateLoaders('stylus'),
         styl: generateLoaders('stylus')
     };
-};
+}
 
 // Generate loaders for standalone style files (outside of .vue)
-function styleLoaders (options) {
+export function styleLoaders(options) {
     let output = [];
     let loaders = cssLoaders(options);
 
@@ -80,4 +76,4 @@ function styleLoaders (options) {
     });
 
     return output;
-};
+}

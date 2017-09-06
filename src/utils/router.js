@@ -8,16 +8,14 @@ import glob from 'glob';
  * @return {Promise} resolve generated router, reject error
  */
 
-export {generateRoutes};
-
-function generateRoutes (baseDir) {
+export function generateRoutes (baseDir) {
     return getDirs(baseDir, '.vue')
         .then(dirs => {
             let tree = mapDirsInfo(dirs, baseDir)
                 .reduce((tree, info) => appendToTree(tree, info.level, info), []);
             return treeToRouter(tree[0].children, {dir: baseDir});
         });
-};
+}
 
 function getDirs(baseDir, ext = '') {
     return new Promise((res, reject) => {
@@ -144,11 +142,9 @@ function treeToRouter(tree, parent) {
             route.component += '.vue';
             route.children = treeToRouter(children, info);
         }
-        else {
-            route.name = info.level.slice(1).join('-')
-                .replace(/_/g, '')
-                .replace(/(-index)?\.vue$/, '');
-        }
+        route.name = info.level.slice(1).join('-')
+            .replace(/_/g, '')
+            .replace(/(-index)?\.vue$/, '');
 
         router.push(route);
         return router;

@@ -5,14 +5,15 @@
 
 import {join} from 'path';
 import {readFile} from 'fs-extra';
-import pify from 'pify';
-import rimraf from 'rimraf';
 import webpack from 'webpack';
 import MFS from 'memory-fs';
 import koaWebpack from 'koa-webpack';
 import {createBundleRenderer} from 'vue-server-renderer';
 
-class Renderer {
+const CLIENT_MANIFEST = 'vue-ssr-client-manifest.json';
+const SERVER_BUNDLE = 'vue-ssr-server-bundle.json';
+
+export default class Renderer {
     constructor(core) {
         this.env = core.env;
         this.config = core.config;
@@ -23,55 +24,57 @@ class Renderer {
         this.clientManifest = null;
         this.resolve = null;
         this.readyPromise = new Promise(r => this.resolve = r);
+        this.privateFiles = [CLIENT_MANIFEST, SERVER_BUNDLE];
     }
 
-    async init(clientConfig, serverConfig) {
+    async createWithBundle() {
+        let outputPath = this.config.webpack.base.output.path;
+        this.serverBundle = await import(join(outputPath, SERVER_BUNDLE));
+        this.clientManifest = await import(join(outputPath, CLIENT_MANIFEST));
+        await this.createRenderer();
+    }
+
+    async buildInProduction(clientConfig, serverConfig) {
+        // set context in both configs
+        clientConfig.context = this.rootDir;
+        serverConfig.context = this.rootDir;
+
+        // start to build client & server configs
+        await new Promise((resolve, reject) => {
+
+            webpack([clientConfig, serverConfig], (err, stats) => {
+                if (err) {
+                    console.error(err.stack || err);
+                    if (err.details) {
+                        console.error(err.details);
+                    }
+                    reject(err);
+                    return;
+                }
+
+                const info = stats.toJson();
+
+                if (stats.hasErrors()) {
+                    console.error(info.errors);
+                    reject(info.errors);
+                    return;
+                }
+
+                if (stats.hasWarnings()) {
+                    console.warn(info.warnings);
+                }
+
+                console.log('[Lavas] production build completed.');
+                resolve();
+            });
+        });
+    }
+
+    async build(clientConfig, serverConfig) {
         this.clientConfig = clientConfig;
         this.serverConfig = serverConfig;
         if (this.env === 'production') {
-            
-            let outputPath = this.config.webpack.base.output.path;
-
-            // clear dist/
-            await pify(rimraf)(outputPath);
-
-            // set context in both configs
-            clientConfig.context = this.rootDir;
-            serverConfig.context = this.rootDir;
-
-            // start to build client & server configs
-            await new Promise((resolve, reject) => {
-
-                webpack([clientConfig, serverConfig], (err, stats) => {
-                    if (err) {
-                        console.error(err.stack || err);
-                        if (err.details) {
-                            console.error(err.details);
-                        }
-                        reject(err);
-                        return;
-                    }
-
-                    const info = stats.toJson();
-
-                    if (stats.hasErrors()) {
-                        console.error(info.errors);
-                        reject(info.errors);
-                        return;
-                    }
-
-                    if (stats.hasWarnings()) {
-                        console.warn(info.warnings);
-                    }
-
-                    console.log('[Lavas] production build completed.');
-                    resolve();
-                });
-            });
-            
-            this.serverBundle = await import(join(outputPath, './vue-ssr-server-bundle.json'));
-            this.clientManifest = await import(join(outputPath, './vue-ssr-client-manifest.json'));
-            await this.createRenderer();
+            await this.buildInProduction(clientConfig, serverConfig);
         }
         else {
             // get client manifest
@@ -94,7 +97,6 @@ class Renderer {
      * @param {Function} callback callback
      */
     getClientManifest(callback) {
-        let clientManifest;
         let clientConfig = this.clientConfig;
 
         clientConfig.context = this.rootDir;
@@ -135,7 +137,7 @@ class Renderer {
             }
 
             let rawContent = koaWebpackMiddleware.dev.fileSystem
-                .readFileSync(join(clientConfig.output.path, 'vue-ssr-client-manifest.json'), 'utf-8');
+                .readFileSync(join(clientConfig.output.path, CLIENT_MANIFEST), 'utf-8');
 
             this.clientManifest = JSON.parse(rawContent);
 
@@ -172,7 +174,7 @@ class Renderer {
             }
 
             let rawContent = mfs.readFileSync(
-                join(serverConfig.output.path, 'vue-ssr-server-bundle.json'), 'utf8');
+                join(serverConfig.output.path, SERVER_BUNDLE), 'utf8');
 
             // read bundle generated by vue-ssr-webpack-plugin
             this.serverBundle = JSON.parse(rawContent);
@@ -214,5 +216,3 @@ class Renderer {
         return this.readyPromise;
     }
 }
-
-export default Renderer;

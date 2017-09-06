@@ -14,23 +14,71 @@ import OptimizeCSSPlugin from 'optimize-css-assets-webpack-plugin';
 import CopyWebpackPlugin from 'copy-webpack-plugin';
 import VueSSRClientPlugin from 'vue-server-renderer/client-plugin';
 import VueSSRServerPlugin from 'vue-server-renderer/server-plugin';
+import BundleAnalyzerPlugin from 'webpack-bundle-analyzer';
+import ManifestJsonWebpackPlugin from './buildinPlugins/manifest-json-webpack-plugin';
 
 import {vueLoaders, styleLoaders} from './utils/loader';
 
-class WebpackConfig {
+export default class WebpackConfig {
     constructor(config = {}, env) {
         this.config = config;
         this.env = env;
+        this.hooks = {};
     }
 
-    assetsPath(newPath) {
-        return posix.join(this.config.webpack.shortcuts.assetsDir, newPath);
+    /**
+     * generate a relative path based on config
+     * eg. static/js/[name].[hash].js
+     *
+     * @param {string} sourcePath source path
+     * @return {string} relative path
+     */
+    assetsPath(sourcePath) {
+        return posix.join(this.config.webpack.shortcuts.assetsDir, sourcePath);
     }
 
+    /**
+     * add hooks to proper queue
+     *
+     * @param {Object} hooks hook object contains base, client and server function
+     */
+    addHooks(hooks) {
+
+        Object.keys(hooks).forEach(hookKey => {
+            let hook = hooks[hookKey];
+            if (!this.hooks[hookKey]) {
+                this.hooks[hookKey] = [];
+            }
+            if (hook && typeof hook === 'function') {
+                this.hooks[hookKey].push(hook);
+            }
+        });
+    }
+
+    /**
+     * serially execute added hooks
+     *
+     * @param {string} type base|server|client
+     * @param {Object} config config
+     */
+    executeHooks(type, config) {
+        if (this.hooks[type]) {
+            this.hooks[type].forEach(hook => {
+                hook.call(null, config);
+            });
+        }
+    }
+
+    /**
+     * generate webpack base config based on lavas config
+     *
+     * @param {Object} config lavas config
+     * @return {Object} webpack base config
+     */
     base(config) {
         let isProd = this.env === 'production';
         let {globals, webpack: webpackConfig, babel} = config;
-        let {base, shortcuts, mergeStrategy = {}, build} = webpackConfig;
+        let {base, shortcuts, mergeStrategy = {}, extend} = webpackConfig;
         let {cssSourceMap, cssMinimize, cssExtract, jsSourceMap} = shortcuts;
 
         let baseConfig = merge.strategy(mergeStrategy)({
@@ -84,12 +132,12 @@ class WebpackConfig {
             },
             plugins: isProd
                 ? [
-                    new webpack.optimize.UglifyJsPlugin({
-                        compress: {
-                            warnings: false
-                        },
-                        sourceMap: jsSourceMap
-                    }),
+                    // new webpack.optimize.UglifyJsPlugin({
+                    //     compress: {
+                    //         warnings: false
+                    //     },
+                    //     sourceMap: jsSourceMap
+                    // }),
                     new ExtractTextPlugin({
                         filename: this.assetsPath('css/[name].[contenthash].css')
                     }),
@@ -102,18 +150,29 @@ class WebpackConfig {
                 : [new FriendlyErrorsPlugin()]
         }, base);
 
-        if (typeof build === 'function') {
-            build.call(this, baseConfig, {type: 'base'});
+        if (typeof extend === 'function') {
+            extend.call(this, baseConfig, {
+                type: 'base',
+                env: this.env
+            });
         }
+
+        this.executeHooks('base', baseConfig);
 
         return baseConfig;
     }
 
+    /**
+     * generate client base config based on lavas config
+     *
+     * @param {Object} config lavas config
+     * @return {Object} client base config
+     */
     client(config) {
-        let {globals, webpack: webpackConfig} = config;
-        let {base, client, shortcuts, mergeStrategy = {}, build} = webpackConfig;
-        let {ssr, cssSourceMap, cssMinimize, cssExtract,
-            jsSourceMap, assetsDir, copyDir} = shortcuts;
+        let webpackConfig = config.webpack;
+        let {client, shortcuts, mergeStrategy = {}, extend} = webpackConfig;
+        let {ssr, cssSourceMap, cssMinimize,cssExtract,
+            jsSourceMap, assetsDir, copyDir, bundleAnalyzerReport} = shortcuts;
 
         let baseConfig = this.base(config);
         let clientConfig = merge.strategy(mergeStrategy)(baseConfig, {
@@ -155,7 +214,12 @@ class WebpackConfig {
                         let targets = ['vue', 'vue-router', 'vuex', 'vue-meta'];
                         return context
                             && context.indexOf('node_modules') >= 0
-                            && targets.find(t => new RegExp('/' + t + '/', 'i').test(context));
+                            && targets.find(t => {
+                                let npmRegExp = new RegExp(`/${t}/`, 'i');
+                                // compatible with cnpm, eg./_vue@2.4.2@vue/
+                                let cnpmRegExp = new RegExp(`/_${t}@\\d\\.\\d\\.\\d@${t}/`, 'i');
+                                return npmRegExp.test(context) || cnpmRegExp.test(context);
+                            });
                     }
                 }),
 
@@ -171,24 +235,44 @@ class WebpackConfig {
                     from: copyDir,
                     to: assetsDir,
                     ignore: ['.*']
-                }])
+                }]),
+
+                new ManifestJsonWebpackPlugin({
+                    config: this.config.manifest
+                })
             ]
         }, client);
-    
+
         if (ssr) {
             clientConfig.plugins.push(new VueSSRClientPlugin());
         }
 
-        if (typeof build === 'function') {
-            build.call(this, clientConfig, {type: 'client'});
+        if (bundleAnalyzerReport) {
+            clientConfig.plugins.push(
+                new BundleAnalyzerPlugin(Object.assign({}, bundleAnalyzerReport)));
         }
+
+        if (typeof extend === 'function') {
+            extend.call(this, clientConfig, {
+                type: 'client',
+                env: this.env
+            });
+        }
+
+        this.executeHooks('client', clientConfig);
 
         return clientConfig;
     }
 
+    /**
+     * generate webpack server config based on lavas config
+     *
+     * @param {Object} config lavas config
+     * @return {Object} webpack server config
+     */
     server(config) {
-        let {webpack: webpackConfig} = config;
-        let {base, server, mergeStrategy = {}, build} = webpackConfig;
+        let webpackConfig = config.webpack;
+        let {server, mergeStrategy = {}, extend} = webpackConfig;
 
         let baseConfig = this.base(config);
         let serverConfig = merge.strategy(mergeStrategy)(baseConfig, {
@@ -213,12 +297,15 @@ class WebpackConfig {
             ]
         }, server);
 
-        if (typeof build === 'function') {
-            build.call(this, serverConfig, {type: 'server'});
+        if (typeof extend === 'function') {
+            extend.call(this, serverConfig, {
+                type: 'server',
+                env: this.env
+            });
         }
+
+        this.executeHooks('server', serverConfig);
 
         return serverConfig;
     }
 }
-
-export default WebpackConfig;
