@@ -22,22 +22,23 @@ import HtmlWebpackPlugin from 'html-webpack-plugin';
 import SkeletonWebpackPlugin from 'vue-skeleton-webpack-plugin';
 
 import {generateRoutes} from './utils/router';
+import {distLavasPath} from './utils/path';
+import {ROUTES_FILE, SKELETON_DIRNAME} from './constants';
 
 const routesTemplate = join(__dirname, './templates/routes.tpl');
 const skeletonEntryTemplate = join(__dirname, './templates/entry-skeleton.tpl');
-const ROUTES_FILE = 'routes.json';
 
 export default class RouteManager {
 
-    constructor(config, env, webpackConfig) {
-        this.config = config;
-        this.env = env;
-        this.webpackConfig = webpackConfig;
+    constructor(core) {
+        this.config = core.config;
+        this.env = core.env;
+        this.cwd = core.cwd;
+        this.webpackConfig = core.webpackConfig;
 
-        Object.assign(this, {
-            targetDir: join(config.globals.rootDir, './.lavas'),
-            skeletonsDirname: 'skeletons'
-        });
+        if (this.config) {
+            this.targetDir = join(this.config.globals.rootDir, './.lavas');
+        }
 
         this.routes = [];
 
@@ -97,7 +98,7 @@ export default class RouteManager {
     async createEntryForSkeleton(pagename, skeletonPath) {
 
         // .lavas/skeletons
-        let skeletonsDir = join(this.targetDir, this.skeletonsDirname);
+        let skeletonsDir = join(this.targetDir, SKELETON_DIRNAME);
         await emptyDir(skeletonsDir);
 
         // eg. .lavas/skeletons/detail-entry-skeleton.js
@@ -169,7 +170,8 @@ export default class RouteManager {
                         removeAttributeQuotes: true
                     },
                     favicon: join(assetsDir, 'img/icons/favicon.ico'),
-                    chunksSortMode: 'dependency'
+                    chunksSortMode: 'dependency',
+                    config: this.config
                 }));
 
                 if (skeleton) {
@@ -221,7 +223,7 @@ export default class RouteManager {
                         console.warn(info.warnings);
                     }
 
-                    console.log('[Lavas] prerender completed.');
+                    console.log('[Lavas] MPA build completed.');
                     resolve();
                 });
             });
@@ -308,8 +310,8 @@ export default class RouteManager {
      *
      */
     async writeRoutesFile() {
-        // write contents into dist/routes.json
-        let routesFilePath = join(this.config.webpack.base.output.path, ROUTES_FILE);
+        // write contents into dist/lavas/routes.json
+        let routesFilePath = distLavasPath(this.config.webpack.base.output.path, ROUTES_FILE);
         this.privateFiles.push(ROUTES_FILE);
         await ensureFile(routesFilePath);
         await writeFile(
@@ -369,7 +371,7 @@ export default class RouteManager {
      *
      */
     async createWithRoutesFile() {
-        let routesFilePath = join(this.config.webpack.base.output.path, './routes.json');
+        let routesFilePath = distLavasPath(this.cwd, ROUTES_FILE);
         this.routes = JSON.parse(await readFile(routesFilePath, 'utf8'));
         this.mergeWithConfig(this.routes);
     }

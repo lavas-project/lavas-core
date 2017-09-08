@@ -4,34 +4,37 @@
  */
 
 import {join} from 'path';
-import {readFile} from 'fs-extra';
+import {readFile, copy} from 'fs-extra';
 import webpack from 'webpack';
 import MFS from 'memory-fs';
-import koaWebpack from 'koa-webpack';
+import webpackDevMiddleware from 'webpack-dev-middleware';
+import webpackHotMiddleware from 'webpack-hot-middleware';
 import {createBundleRenderer} from 'vue-server-renderer';
 
-const CLIENT_MANIFEST = 'vue-ssr-client-manifest.json';
-const SERVER_BUNDLE = 'vue-ssr-server-bundle.json';
+import {distLavasPath} from './utils/path';
+import {CLIENT_MANIFEST, SERVER_BUNDLE, TEMPLATE_HTML} from './constants';
 
 export default class Renderer {
     constructor(core) {
         this.env = core.env;
         this.config = core.config;
-        this.rootDir = this.config.globals.rootDir;
+        this.rootDir = this.config && this.config.globals.rootDir;
+        this.cwd = core.cwd;
         this.app = core.app;
         this.renderer = null;
         this.serverBundle = null;
         this.clientManifest = null;
         this.resolve = null;
         this.readyPromise = new Promise(r => this.resolve = r);
-        this.privateFiles = [CLIENT_MANIFEST, SERVER_BUNDLE];
+        this.privateFiles = [CLIENT_MANIFEST, SERVER_BUNDLE, TEMPLATE_HTML];
     }
 
     async createWithBundle() {
-        let outputPath = this.config.webpack.base.output.path;
-        this.serverBundle = await import(join(outputPath, SERVER_BUNDLE));
-        this.clientManifest = await import(join(outputPath, CLIENT_MANIFEST));
-        await this.createRenderer();
+        this.serverBundle = await import(distLavasPath(this.cwd, SERVER_BUNDLE));
+        this.clientManifest = await import(distLavasPath(this.cwd, CLIENT_MANIFEST));
+        await this.createRenderer({
+            templatePath: distLavasPath(this.cwd, TEMPLATE_HTML)
+        });
     }
 
     async buildInProduction(clientConfig, serverConfig) {
@@ -64,13 +67,19 @@ export default class Renderer {
                     console.warn(info.warnings);
                 }
 
-                console.log('[Lavas] production build completed.');
+                console.log('[Lavas] SSR build completed.');
                 resolve();
             });
         });
+
+        // copy index.template.html to dist/lavas
+        let templatePath = join(this.rootDir, 'core', TEMPLATE_HTML);
+        let distTemplatePath = distLavasPath(this.config.webpack.base.output.path, TEMPLATE_HTML);
+        await copy(templatePath, distTemplatePath);
     }
 
     async build(clientConfig, serverConfig) {
+        let templatePath = join(this.rootDir, 'core', TEMPLATE_HTML);
         this.clientConfig = clientConfig;
         this.serverConfig = serverConfig;
         if (this.env === 'production') {
@@ -80,13 +89,13 @@ export default class Renderer {
             // get client manifest
             this.getClientManifest(async (err, manifest) => {
                 this.clientManifest = manifest;
-                await this.createRenderer();
+                await this.createRenderer({templatePath});
             });
 
             // get server bundle
             this.getServerBundle(async (err, serverBundle) => {
                 this.serverBundle = serverBundle;
-                await this.createRenderer();
+                await this.createRenderer({templatePath});
             });
         }
     }
@@ -109,18 +118,20 @@ export default class Renderer {
         // init client compiler
         let clientCompiler = webpack(clientConfig);
 
-        // use koa webpack middleware which already includes dev&hot middleware
-        let koaWebpackMiddleware = koaWebpack({
-            compiler: clientCompiler,
-            dev: {
-                publicPath: this.config.webpack.base.output.publicPath,
-                noInfo: true
-            },
-            hot: {
-                heartbeat: 5000
-            }
+        // dev middleware
+        let devMiddleware = webpackDevMiddleware(clientCompiler, {
+            publicPath: this.config.webpack.base.output.publicPath,
+            noInfo: true
         });
-        this.app.use(koaWebpackMiddleware);
+
+        this.app.use(devMiddleware);
+
+        // hot middleware
+        let hotMiddleware = webpackHotMiddleware(clientCompiler, {
+            heartbeat: 5000
+        });
+
+        this.app.use(hotMiddleware);
 
         clientCompiler.plugin('done', stats => {
             stats = stats.toJson();
@@ -136,8 +147,8 @@ export default class Renderer {
                 return;
             }
 
-            let rawContent = koaWebpackMiddleware.dev.fileSystem
-                .readFileSync(join(clientConfig.output.path, CLIENT_MANIFEST), 'utf-8');
+            let rawContent = devMiddleware.fileSystem
+                .readFileSync(distLavasPath(clientConfig.output.path, CLIENT_MANIFEST), 'utf-8');
 
             this.clientManifest = JSON.parse(rawContent);
 
@@ -174,7 +185,7 @@ export default class Renderer {
             }
 
             let rawContent = mfs.readFileSync(
-                join(serverConfig.output.path, SERVER_BUNDLE), 'utf8');
+                distLavasPath(serverConfig.output.path, SERVER_BUNDLE), 'utf8');
 
             // read bundle generated by vue-ssr-webpack-plugin
             this.serverBundle = JSON.parse(rawContent);
@@ -186,13 +197,13 @@ export default class Renderer {
     /**
      * create renderer
      */
-    async createRenderer() {
-        if (this.serverBundle && this.clientManifest) {
+    async createRenderer({templatePath}) {
+        if (this.serverBundle && this.clientManifest && templatePath) {
             let first = !this.renderer;
-            let template = await readFile(join(this.rootDir, './core/index.template.html'), 'utf-8');
+            let template = await readFile(templatePath, 'utf-8');
             this.renderer = createBundleRenderer(this.serverBundle, {
                 template,
-                basedir: this.config.webpack.base.output.path,
+                // basedir: this.config.webpack.base.output.path,
                 clientManifest: this.clientManifest,
                 runInNewContext: false
             });
