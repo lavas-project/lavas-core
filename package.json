@@ -72,7 +72,7 @@
     "vue-meta": "^1.0.5",
     "vue-router": "^2.7.0",
     "vue-server-renderer": "^2.4.2",
-    "vue-skeleton-webpack-plugin": "^1.1.4",
+    "vue-skeleton-webpack-plugin": "^1.1.5",
     "vue-template-compiler": "^2.4.2",
     "vuex": "^2.3.1",
     "webpack": "^3.5.4",
@@ -85,6 +85,7 @@
   "devDependencies": {
     "ava": "^0.18.2",
     "babel-cli": "^6.24.0",
+    "babel-core": "^6.25.0",
     "babel-helper-explode-class": "^6.24.1",
     "babel-plugin-add-module-exports": "^0.2.0",
     "babel-plugin-dynamic-import-node": "^1.0.2",
