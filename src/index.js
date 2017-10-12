@@ -2,11 +2,10 @@
  * @file index.js
  * @author lavas
  */
-import RouteManager from './RouteManager';
-import Renderer from './Renderer';
-import WebpackConfig from './WebpackConfig';
-import ConfigReader from './ConfigReader';
-import ConfigValidator from './ConfigValidator';
+
+import Renderer from './renderer';
+import ConfigReader from './config-reader';
+import Builder from './builder';
 
 import privateFileFactory from './middlewares/privateFile';
 import ssrFactory from './middlewares/ssr';
@@ -15,115 +14,86 @@ import expressErrorFactory from './middlewares/expressError';
 
 import ora from 'ora';
 
-import connect from 'connect';
 import {compose} from 'compose-middleware';
 import composeKoa from 'koa-compose';
 import c2k from 'koa-connect';
 import serve from 'serve-static';
+import favicon from 'serve-favicon';
+import compression from 'compression';
 
-import {emptyDir, copy} from 'fs-extra';
 import {join} from 'path';
+import EventEmitter from 'events';
 
-export default class LavasCore {
+export default class LavasCore extends EventEmitter {
     constructor(cwd = process.cwd()) {
+        super();
         this.cwd = cwd;
     }
 
     /**
-     * invoked by build & runAfterBuild, do something different in each senario
+     * invoked before build & runAfterBuild, do something different in each senario
      *
+     * @param {string} env NODE_ENV
      * @param {boolean} isInBuild is in build process
      */
-    async _init(isInBuild) {
+    async init(env, isInBuild) {
+        this.env = env;
         this.isProd = this.env === 'production';
         this.configReader = new ConfigReader(this.cwd, this.env);
 
         /**
-         * in a build process, we need to:
-         * 1. read config by scan a directory
-         * 2. validate the config
-         * 3. create a webpack config for later use
-         *
-         * but for online server after build, we just:
-         * 1. read config.json directly
+         * in a build process, we need to read config by scan a directory,
+         * but for online server after build, we just read config.json directly
          */
         if (isInBuild) {
             // scan directory
             this.config = await this.configReader.read();
-            // validate props in config
-            ConfigValidator.validate(this.config);
-            this.webpackConfig = new WebpackConfig(this.config, this.env);
         }
         else {
             // read config from config.json
-            this.config = await this.configReader.readConfigFile(this.cwd);
+            this.config = await this.configReader.readConfigFile();
         }
 
-        // in prod build process we don't need to run a server
-        if (!isInBuild || !this.isProd) {
-            this.app = connect();
-        }
-
-        // init renderer & routeManager
+        this.internalMiddlewares = [];
         this.renderer = new Renderer(this);
-        this.routeManager = new RouteManager(this);
+        this.builder = new Builder(this);
     }
 
     /**
      * build in dev & prod mode
      *
-     * @param {string} env NODE_ENV
      */
-    async build(env = 'development') {
-        this.env = env || process.env.NODE_ENV;
-
-        await this._init(true);
-
+    async build() {
         let spinner = ora();
+
         spinner.start();
-
-        // clear dist/
-        await emptyDir(this.config.webpack.base.output.path);
-
-        // build routes' info and source code
-        await this.routeManager.buildRoutes();
-
-        // add extension's hooks
-        if (this.config.extensions) {
-            this.config.extensions.forEach(({name, init}) => {
-                console.log(`[Lavas] ${name} extension is running...`);
-                this.webpackConfig.addHooks(init);
-            });
-        }
-
-        // webpack client & server config
-        let clientConfig = this.webpackConfig.client(this.config);
-        let serverConfig = this.webpackConfig.server(this.config);
-
-        // build bundle renderer
-        await this.renderer.build(clientConfig, serverConfig);
-
         if (this.isProd) {
-            /**
-             * when running online server, renderer needs to use template and
-             * replace some variables such as meta, config in it. so we need
-             * to store some props in config.json.
-             * TODO: not all the props in config is needed. for now, only manifest
-             * & assetsDir are required. some props such as globalDir are useless.
-             */
-            await this.configReader.writeConfigFile(this.config);
-            // compile multi entries only in production mode
-            await this.routeManager.buildMultiEntries();
-            // store routes info in routes.json for later use
-            await this.routeManager.writeRoutesFile();
-            // copy to /dist
-            await this._copyServerModuleToDist();
+            await this.builder.buildProd();
         }
         else {
-            // TODO: use chokidar to rebuild...
+            this.setupInternalMiddlewares();
+            await this.builder.buildDev();
         }
+        spinner.succeed(`[Lavas] ${this.env} build completed.`);
+    }
 
-        spinner.succeed(`[Lavas] ${this.env} build is completed.`);
+    /**
+     * setup some internal middlewares
+     *
+     */
+    setupInternalMiddlewares() {
+        // gzip compression
+        this.internalMiddlewares.push(compression());
+        // serve favicon
+        let faviconPath = join(this.cwd, 'static/img/icons', 'favicon.ico');
+        this.internalMiddlewares.push(favicon(faviconPath));
+        if (this.isProd) {
+            /**
+             * add static files middleware only in prod mode,
+             * we already have webpack-dev-middleware in dev mode
+             */
+            this.internalMiddlewares.push(serve(this.cwd));
+        }
     }
 
     /**
@@ -131,10 +101,8 @@ export default class LavasCore {
      *
      */
     async runAfterBuild() {
-        this.env = 'production';
-        await this._init();
-        // create with routes.json
-        await this.routeManager.createWithRoutesFile();
+        this.setupInternalMiddlewares();
+        this.renderer = new Renderer(this);
         // create with bundle & manifest
         await this.renderer.createWithBundle();
     }
@@ -145,63 +113,38 @@ export default class LavasCore {
      * @return {Function} koa middleware
      */
     koaMiddleware() {
-        if (this.isProd) {
-            // add static middleware
-            this.app.use(serve(this.cwd));
-        }
-
+        let ssrExists = this.config.entry.some(e => e.ssr);
         // transform express/connect style middleware to koa style
-        let transformedMiddlewares = this.app.stack.map(m => c2k(m.handle));
-
         return composeKoa([
             koaErrorFactory(this),
-            async function (ctx, next) {
+            async (ctx, next) => {
                 // koa defaults to 404 when it sees that status is unset
                 ctx.status = 200;
                 await next();
             },
             c2k(privateFileFactory(this)),
-            ...transformedMiddlewares,
-            c2k(ssrFactory(this))
-        ]);
-    }
-
-    expressMiddleware() {
-        if (this.isProd) {
-            // add static middleware
-            this.app.use(serve(this.cwd));
-        }
-
-        // use middlewares directly
-        let middlewares = this.app.stack.map(m => m.handle);
-
-        return compose([
-            privateFileFactory(this),
-            ...middlewares,
-            ssrFactory(this),
-            expressErrorFactory(this)
+            ...this.internalMiddlewares.map(c2k),
+            ssrExists ? c2k(ssrFactory(this)) : () => {}
         ]);
     }
 
     /**
-     * copy server relatived files into dist when build
+     * compose all the middlewares
+     *
+     * @return {Function} express middleware
      */
-    async _copyServerModuleToDist() {
-        let distPath = this.config.webpack.base.output.path;
-        let libDir = join(this.cwd, './lib');
-        let distLibDir = join(distPath, 'lib');
-        let serverDir = join(this.cwd, './server.dev.js');
-        let distServerDir = join(distPath, 'server.js');
-        let nodeModulesDir = join(this.cwd, 'node_modules');
-        let distNodeModulesDir = join(distPath, 'node_modules');
-        let jsonDir = join(this.cwd, 'package.json');
-        let distJsonDir = join(distPath, 'package.json');
-
-        await Promise.all([
-            copy(libDir, distLibDir),
-            copy(serverDir, distServerDir),
-            copy(nodeModulesDir, distNodeModulesDir),
-            copy(jsonDir, distJsonDir)
+    expressMiddleware() {
+        let ssrExists = this.config.entry.some(e => e.ssr);
+        return compose([
+            privateFileFactory(this),
+            ...this.internalMiddlewares,
+            ssrExists ? ssrFactory(this) : () => {},
+            expressErrorFactory(this)
         ]);
+    }
+
+    async close() {
+        await this.builder.close();
+        console.log('[Lavas] lavas closed.');
     }
 }

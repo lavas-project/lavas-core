@@ -3,27 +3,37 @@
  * @author *__ author __*{% if: *__ email __* %}(*__ email __*){% /if %}
  */
 
-import {ensureFile, writeFile} from 'fs-extra';
+import {ensureFile, writeFile, readFile} from 'fs-extra';
 import {join} from 'path';
 import glob from 'glob';
 import _ from 'lodash';
 import {CONFIG_FILE} from './constants';
 import {distLavasPath} from './utils/path';
+import * as JsonUtil from './utils/json';
 
 export default class ConfigReader {
     constructor(cwd, env) {
         this.cwd = cwd;
         this.env = env;
-        this.privateFiles = [];
     }
 
+    /**
+     * generate a config object according to config directory and NODE_ENV
+     *
+     * @return {Object} config
+     */
     async read() {
-        const config = {};
+        // add buildVersion
+        const config = {
+            globals: {
+                rootDir: this.cwd
+            },
+            buildVersion: Date.now()
+        };
         let configDir = join(this.cwd, 'config');
         let files = glob.sync(
             '**/*.js', {
-                cwd: configDir,
-                ignore: '*.recommend.js'
+                cwd: configDir
             }
         );
 
@@ -46,8 +56,10 @@ export default class ConfigReader {
 
             name = paths.pop();
 
-            // load config
-            cur[name] = await import(join(configDir, filepath));
+            // load config, delete cache first
+            let configPath = join(configDir, filepath);
+            delete require.cache[require.resolve(configPath)];
+            cur[name] = await import(configPath);
         }));
 
         let temp = config.env || {};
@@ -60,18 +72,12 @@ export default class ConfigReader {
         return config;
     }
 
+    /**
+     * in prod mode, read config.json directly instead of analysing config directory
+     *
+     * @return {Object} config
+     */
     async readConfigFile() {
-        return await import(distLavasPath(this.cwd, CONFIG_FILE));
-    }
-
-    async writeConfigFile(config) {
-        let configFilePath = distLavasPath(config.webpack.base.output.path, CONFIG_FILE);
-        this.privateFiles.push(CONFIG_FILE);
-        await ensureFile(configFilePath);
-        await writeFile(
-            configFilePath,
-            JSON.stringify(config),
-            'utf8'
-        );
+        return JsonUtil.parse(await readFile(distLavasPath(this.cwd, CONFIG_FILE), 'utf8'));
     }
 }

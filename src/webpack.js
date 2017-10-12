@@ -5,90 +5,60 @@
 
 import webpack from 'webpack';
 import merge from 'webpack-merge';
-import {posix, join} from 'path';
+import {posix, join, resolve, sep} from 'path';
 
 import nodeExternals from 'webpack-node-externals';
 import ExtractTextPlugin from 'extract-text-webpack-plugin';
 import FriendlyErrorsPlugin from 'friendly-errors-webpack-plugin';
 import OptimizeCSSPlugin from 'optimize-css-assets-webpack-plugin';
 import CopyWebpackPlugin from 'copy-webpack-plugin';
-import VueSSRClientPlugin from 'vue-server-renderer/client-plugin';
 import VueSSRServerPlugin from 'vue-server-renderer/server-plugin';
 import BundleAnalyzerPlugin from 'webpack-bundle-analyzer';
-import ManifestJsonWebpackPlugin from './buildinPlugins/manifest-json-webpack-plugin';
+import ManifestJsonWebpackPlugin from './plugins/manifest-json-webpack-plugin';
+import SWPrecacheWebPlugin from 'sw-precache-webpack-plugin';
+import SWRegisterWebpackPlugin from 'sw-register-webpack-plugin';
 
 import {vueLoaders, styleLoaders} from './utils/loader';
-import {LAVAS_DIRNAME_IN_DIST, CLIENT_MANIFEST, SERVER_BUNDLE} from './constants';
+import {assetsPath} from './utils/path';
+import {LAVAS_DIRNAME_IN_DIST, SERVER_BUNDLE} from './constants';
+
+import fs from 'fs';
+import gracefulFs from 'graceful-fs';
+
+// solve 'too many open files' problem on Windows
+// see https://github.com/webpack-contrib/copy-webpack-plugin/issues/59
+gracefulFs.gracefulify(fs);
 
 export default class WebpackConfig {
     constructor(config = {}, env) {
         this.config = config;
         this.env = env;
-        this.hooks = {};
-    }
-
-    /**
-     * generate a relative path based on config
-     * eg. static/js/[name].[hash].js
-     *
-     * @param {string} sourcePath source path
-     * @return {string} relative path
-     */
-    assetsPath(sourcePath) {
-        return posix.join(this.config.webpack.shortcuts.assetsDir, sourcePath);
-    }
-
-    /**
-     * add hooks to proper queue
-     *
-     * @param {Object} hooks hook object contains base, client and server function
-     */
-    addHooks(hooks) {
-
-        Object.keys(hooks).forEach(hookKey => {
-            let hook = hooks[hookKey];
-            if (!this.hooks[hookKey]) {
-                this.hooks[hookKey] = [];
-            }
-            if (hook && typeof hook === 'function') {
-                this.hooks[hookKey].push(hook);
-            }
-        });
-    }
-
-    /**
-     * serially execute added hooks
-     *
-     * @param {string} type base|server|client
-     * @param {Object} config config
-     */
-    executeHooks(type, config) {
-        if (this.hooks[type]) {
-            this.hooks[type].forEach(hook => {
-                hook.call(null, config);
-            });
-        }
+        this.isProd = this.env === 'production';
+        this.isDev = this.env === 'development';
     }
 
     /**
      * generate webpack base config based on lavas config
      *
-     * @param {Object} config lavas config
+     * @param {Object} buildConfig build config
      * @return {Object} webpack base config
      */
-    base(config) {
-        let isProd = this.env === 'production';
-        let {globals, webpack: webpackConfig, babel} = config;
-        let {base, shortcuts, mergeStrategy = {}, extend} = webpackConfig;
-        let {cssSourceMap, cssMinimize, cssExtract, jsSourceMap} = shortcuts;
+    base(buildConfig = {}) {
+        let {globals, build, babel, serviceWorker: swPrecacheConfig, routes} = this.config;
+        let {path, publicPath, cssSourceMap, cssMinimize,
+            cssExtract, jsSourceMap, alias, extend} = Object.assign({}, build, buildConfig);
 
-        let baseConfig = merge.strategy(mergeStrategy)({
+        let baseConfig = {
+            output: {
+                path,
+                publicPath
+            },
             resolve: {
                 extensions: ['.js', '.vue', '.json'],
-                alias: {
+                alias: Object.assign({
                     '@': globals.rootDir,
                     '$': join(globals.rootDir, '.lavas')
-                }
+                }, alias)
             },
             module: {
                 rules: [{
@@ -118,7 +88,7 @@ export default class WebpackConfig {
                         loader: 'url-loader',
                         options: {
                             limit: 10000,
-                            name: this.assetsPath('img/[name].[hash:7].[ext]')
+                            name: assetsPath('img/[name].[hash:7].[ext]')
                         }
                     },
                     {
@@ -126,12 +96,12 @@ export default class WebpackConfig {
                         loader: 'url-loader',
                         options: {
                             limit: 10000,
-                            name: this.assetsPath('fonts/[name].[hash:7].[ext]')
+                            name: assetsPath('fonts/[name].[hash:7].[ext]')
                         }
                     }
                 ]
             },
-            plugins: isProd
+            plugins: this.isProd
                 ? [
                     new webpack.optimize.UglifyJsPlugin({
                         compress: {
@@ -143,15 +113,21 @@ export default class WebpackConfig {
                         cssProcessorOptions: {
                             safe: true
                         }
+                    }),
+                    new SWPrecacheWebPlugin(Object.assign(swPrecacheConfig, {
+                        templateFilePath: resolve(__dirname, 'templates/service-worker-real.js.tmpl')
+                    })),
+                    new SWRegisterWebpackPlugin({
+                        filePath: resolve(__dirname, 'templates/sw-register.js')
                     })
                 ]
                 : [new FriendlyErrorsPlugin()]
-        }, base);
+        };
 
         if (cssExtract) {
             baseConfig.plugins.unshift(
                 new ExtractTextPlugin({
-                    filename: this.assetsPath('css/[name].[contenthash].css')
+                    filename: assetsPath('css/[name].[contenthash].css')
                 })
             );
         }
@@ -163,28 +139,28 @@ export default class WebpackConfig {
             });
         }
 
-        this.executeHooks('base', baseConfig);
-
         return baseConfig;
     }
 
     /**
      * generate client base config based on lavas config
      *
-     * @param {Object} config lavas config
+     * @param {Object} buildConfig build config
      * @return {Object} client base config
      */
-    client(config) {
-        let webpackConfig = config.webpack;
-        let {client, shortcuts, mergeStrategy = {}, extend} = webpackConfig;
-        let {ssr, cssSourceMap, cssMinimize, cssExtract,
-            jsSourceMap, assetsDir, copyDir, bundleAnalyzerReport} = shortcuts;
+    client(buildConfig = {}) {
+        let {globals, build, manifest} = this.config;
 
-        let baseConfig = this.base(config);
-        let clientConfig = merge.strategy(mergeStrategy)(baseConfig, {
+        /* eslint-disable fecs-one-var-per-line */
+        let {cssSourceMap, cssMinimize, cssExtract,
+            jsSourceMap, bundleAnalyzerReport, extend, copy} = Object.assign({}, build, buildConfig);
+        /* eslint-enable fecs-one-var-per-line */
+
+        let outputFilename = this.isDev ? 'js/[name].[hash:8].js' : 'js/[name].[chunkhash:8].js';
+        let clientConfig = merge(this.base(buildConfig), {
             output: {
-                filename: this.assetsPath(baseConfig.output.filename),
-                chunkFilename: this.assetsPath('js/[name].[chunkhash:8].js')
+                filename: assetsPath(outputFilename),
+                chunkFilename: assetsPath('js/[name].[chunkhash:8].js')
             },
             module: {
                 rules: styleLoaders({
@@ -216,16 +192,21 @@ export default class WebpackConfig {
                 new webpack.optimize.CommonsChunkPlugin({
                     name: 'vue',
                     minChunks(module, count) {
+                        // On Windows, context will be seperated by '\',
+                        // then paths like '\node_modules\vue\' cannot be matched because of '\v'.
+                        // Transforming into '::node_modules::vue::' can solve this.
                         let context = module.context;
+                        let matchContext = context ? context.split(sep).join('::') : '';
                         let targets = ['vue', 'vue-router', 'vuex', 'vue-meta'];
+                        // /^(vue|vue-router)$/i
+                        let npmRegExp = new RegExp(targets.join('|'), 'i');
+                        // /^(_vue@2.4.2@vue|_vue-router@1.2.3@vue-router)$/i
+                        let cnpmRegExp =
+                            new RegExp(targets.map(t => `_${t}@\\d\\.\\d\\.\\d@${t}`).join('|'), 'i');
+
                         return context
-                            && context.indexOf('node_modules') >= 0
-                            && targets.find(t => {
-                                let npmRegExp = new RegExp(`/${t}/`, 'i');
-                                // compatible with cnpm, eg./_vue@2.4.2@vue/
-                                let cnpmRegExp = new RegExp(`/_${t}@\\d\\.\\d\\.\\d@${t}/`, 'i');
-                                return npmRegExp.test(context) || cnpmRegExp.test(context);
-                            });
+                            && matchContext.indexOf('node_modules') !== -1
+                            && (npmRegExp.test(matchContext) || cnpmRegExp.test(matchContext));
                     }
                 }),
 
@@ -237,23 +218,43 @@ export default class WebpackConfig {
                 }),
 
                 // copy custom static assets
-                new CopyWebpackPlugin([{
-                    from: copyDir,
-                    to: assetsDir,
-                    ignore: ['.*']
-                }]),
+                // new CopyWebpackPlugin([{
+                //     from: join(globals.rootDir, 'static'),
+                //     to: 'static',
+                //     ignore: ['.*']
+                // },{
+                //     from: join(globals.rootDir, 'lib'),
+                //     to: 'lib',
+                //     ignore: ['.*']
+                // },{
+                //     from: join(globals.rootDir, 'server.prod.js'),
+                // }]),
 
                 new ManifestJsonWebpackPlugin({
-                    config: this.config.manifest,
-                    path: this.assetsPath('manifest.json')
+                    config: manifest,
+                    path: assetsPath('manifest.json')
                 })
             ]
-        }, client);
+        });
 
-        if (ssr) {
-            clientConfig.plugins.push(new VueSSRClientPlugin({
-                filename: join(LAVAS_DIRNAME_IN_DIST, CLIENT_MANIFEST)
-            }));
+        if (copy && copy.length !== 0) {
+            let copyPluginConfigs = [];
+            copy.forEach(copyConfig => {
+                if (copyConfig.path) {
+                    let copyPluginConfig = {
+                        from: join(globals.rootDir, copyConfig.path),
+                        to: copyConfig.path
+                    };
+
+                    if (copyConfig.ignore) {
+                        copyPluginConfig.ignore = copyConfig.ignore;
+                    }
+
+                    copyPluginConfigs.push(copyPluginConfig);
+                }
+            });
+
+            clientConfig.plugins.push(new CopyWebpackPlugin(copyPluginConfigs));
         }
 
         if (bundleAnalyzerReport) {
@@ -268,23 +269,19 @@ export default class WebpackConfig {
             });
         }
 
-        this.executeHooks('client', clientConfig);
-
         return clientConfig;
     }
 
     /**
      * generate webpack server config based on lavas config
      *
-     * @param {Object} config lavas config
+     * @param {Object} buildConfig build config
      * @return {Object} webpack server config
      */
-    server(config) {
-        let webpackConfig = config.webpack;
-        let {server, mergeStrategy = {}, extend} = webpackConfig;
+    server(buildConfig = {}) {
+        let {extend, nodeExternalsWhitelist = []} = this.config.build;
 
-        let baseConfig = this.base(config);
-        let serverConfig = merge.strategy(mergeStrategy)(baseConfig, {
+        let serverConfig = merge(this.base(buildConfig), {
             target: 'node',
             output: {
                 filename: 'server-bundle.js',
@@ -295,7 +292,7 @@ export default class WebpackConfig {
             // https://github.com/liady/webpack-node-externals
             externals: nodeExternals({
                 // do not externalize CSS files in case we need to import it from a dep
-                whitelist: [/\.(css|vue)$/]
+                whitelist: [...nodeExternalsWhitelist, /\.(css|vue)$/]
             }),
             plugins: [
                 new webpack.DefinePlugin({
@@ -306,7 +303,7 @@ export default class WebpackConfig {
                     filename: join(LAVAS_DIRNAME_IN_DIST, SERVER_BUNDLE)
                 })
             ]
-        }, server);
+        });
 
         if (typeof extend === 'function') {
             extend.call(this, serverConfig, {
@@ -314,8 +311,6 @@ export default class WebpackConfig {
                 env: this.env
             });
         }
-
-        this.executeHooks('server', serverConfig);
 
         return serverConfig;
     }
