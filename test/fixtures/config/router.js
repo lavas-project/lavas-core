@@ -8,10 +8,27 @@
 module.exports = {
 
     /**
-     * vue router mode, which is not recommended to change it.
+     * route rewrite rules
      *
-     * @type {string}
+     * example:
+     * ```javascript
+     * [{from: '/from/detail/:id', to: '/to/detial/:id'}]
+     * ```
+     *
+     * @type {Array.<Object>}
      */
-    mode: 'history'
+    rewrite: [
+        // {from: /^\/(detail.*)$/, to: '/rewrite/$1'},
+        // {from: '/detail', to: '/rewrite'}
+    ],
 
+    routes: [
+        {
+            pattern: '/detail/:id',
+            // path: '/rewrite/detail/:id',
+            meta: {
+                keepAlive: true
+            }
+        }
+    ]
 };

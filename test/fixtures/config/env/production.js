@@ -7,10 +7,22 @@
 
 module.exports = {
 
-    webpack: {
-        shortcuts: {
-            cssExtract: true
-        }
+    build: {
+        cssExtract: true,
+        ssrCopy: [
+            {
+                path: 'lib'
+            },
+            {
+                path: 'server.prod.js'
+            },
+            {
+                path: 'node_modules'
+            },
+            {
+                path: 'package.json'
+            }
+        ]
     }
 
 };

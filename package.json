@@ -19,7 +19,9 @@
     "concurrency": 1,
     "failFast": true,
     "files": [
-      "test/unit/config-validator.test.js"
+      "test/unit/config-reader.test.js",
+      "test/unit/utils-router.test.js",
+      "test/unit/utils-path.test.js"
     ],
     "require": [
       "babel-register"

@@ -6,73 +6,39 @@
 /* eslint-disable fecs-use-standard-promise */
 
 import merge from 'webpack-merge';
-import {join, resolve} from 'path';
+import {join} from 'path';
 import test from 'ava';
 import LavasCore from '../../lib';
 
 let core;
 
+function syncConfig(lavasCore, config) {
+    lavasCore.config = config;
+    lavasCore.builder.config = config;
+    lavasCore.builder.webpackConfig.config = config;
+}
+
 test.beforeEach('init', async t => {
     core = new LavasCore(join(__dirname, '../fixtures'));
-    await core.init();
+    await core.init('development', true);
 });
 
 test('it should add a new alias', async t => {
     let config = merge(core.config, {
-        webpack: {
-            base: {
-                resolve: {
-                    alias: {
-                        '~~': 'some-path'
-                    }
-                }
+        build: {
+            alias: {
+                '~~': 'some-path'
             }
         }
     });
-    let baseConfig = core.webpackConfig.base(config);
+    syncConfig(core, config);
+    let baseConfig = core.builder.webpackConfig.base();
     t.is(baseConfig.resolve.alias['~~'], 'some-path');
-});
-
-test('it should use "prepend" strategy to merge webpack config', async t => {
-    // prepend custom plugin
-    let config = merge(core.config, {
-        webpack: {
-            base: {
-                plugins: ['CustomPlugin']
-            },
-            mergeStrategy: {
-                plugins: 'prepend'
-            }
-        }
-    });
-
-    let baseConfig = core.webpackConfig.base(config);
-
-    t.is(baseConfig.plugins.length, 2);
-    t.is(baseConfig.plugins[0], 'CustomPlugin');
-});
-
-test('it should use "replace" strategy to merge webpack config', async t => {
-    // replace with custom plugin
-    let config = merge(core.config, {
-        webpack: {
-            base: {
-                plugins: ['CustomPlugin']
-            },
-            mergeStrategy: {
-                plugins: 'replace'
-            }
-        }
-    });
-
-    let baseConfig = core.webpackConfig.base(config);
-    t.is(baseConfig.plugins.length, 1);
-    t.is(baseConfig.plugins[0], 'CustomPlugin');
 });
 
 test('it should use a extend function to modify webpack base config directly', async t => {
     let config = merge(core.config, {
-        webpack: {
+        build: {
             extend(webpackConfig, {type}) {
                 if (type === 'base') {
                     webpackConfig.plugins.push('NewCustomPlugin');
@@ -80,14 +46,17 @@ test('it should use a extend function to modify webpack base config directly', a
             }
         }
     });
-    let baseConfig = core.webpackConfig.base(config);
+
+    syncConfig(core, config);
+
+    let baseConfig = core.builder.webpackConfig.base();
     t.is(baseConfig.plugins.length, 2);
     t.is(baseConfig.plugins[1], 'NewCustomPlugin');
 });
 
 test('it should use a extend function to modify webpack client config directly', async t => {
     let config = merge(core.config, {
-        webpack: {
+        build: {
             extend(webpackConfig, {type}) {
                 if (type === 'client') {
                     webpackConfig.plugins.push('NewClientCustomPlugin');
@@ -96,14 +65,15 @@ test('it should use a extend function to modify webpack client config directly',
         }
     });
 
-    let clientConfig = core.webpackConfig.client(config);
+    syncConfig(core, config);
 
+    let clientConfig = core.builder.webpackConfig.client();
     t.is(clientConfig.plugins[clientConfig.plugins.length - 1], 'NewClientCustomPlugin');
 });
 
 test('it should use a extend function to modify webpack server config directly', async t => {
     let config = merge(core.config, {
-        webpack: {
+        build: {
             extend(webpackConfig, {type}) {
                 if (type === 'server') {
                     webpackConfig.plugins.push('NewServerCustomPlugin');
@@ -112,7 +82,8 @@ test('it should use a extend function to modify webpack server config directly',
         }
     });
 
-    let serverConfig = core.webpackConfig.server(config);
+    syncConfig(core, config);
 
+    let serverConfig = core.builder.webpackConfig.server(config);
     t.is(serverConfig.plugins[serverConfig.plugins.length - 1], 'NewServerCustomPlugin');
 });
