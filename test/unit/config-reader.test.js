@@ -27,7 +27,9 @@ test('it should add a new alias', async t => {
     let config = merge(core.config, {
         build: {
             alias: {
-                '~~': 'some-path'
+                base: {
+                    '~~': 'some-path'
+                }
             }
         }
     });
