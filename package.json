@@ -1,6 +1,6 @@
 {
   "name": "lavas-core",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "description": "lavas core",
   "author": "lavas",
   "main": "lib/index.js",
@@ -76,7 +76,7 @@
     "vue-meta": "^1.0.5",
     "vue-router": "^2.7.0",
     "vue-server-renderer": "^2.4.2",
-    "vue-skeleton-webpack-plugin": "^0.1.5",
+    "vue-skeleton-webpack-plugin": "^0.1.7",
     "vue-template-compiler": "^2.4.2",
     "vuex": "^2.3.1",
     "webpack": "^2.1.0",
