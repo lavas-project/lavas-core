@@ -1,6 +1,6 @@
 {
   "name": "lavas-core",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "description": "lavas core",
   "author": "lavas",
   "main": "lib/index.js",
@@ -54,6 +54,9 @@
     "koa": "^2.3.0",
     "koa-compose": "^4.0.0",
     "koa-connect": "^2.0.0",
+    "koa-mount": "^3.0.0",
+    "koa-send": "^4.1.1",
+    "koa-static": "^4.0.1",
     "lodash": "^4.17.4",
     "lodash.template": "^4.4.0",
     "lodash.uniq": "^4.5.0",
