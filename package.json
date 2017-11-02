@@ -1,6 +1,6 @@
 {
   "name": "lavas-core",
-  "version": "0.0.19",
+  "version": "0.0.23",
   "description": "lavas core",
   "author": "lavas",
   "main": "lib/index.js",

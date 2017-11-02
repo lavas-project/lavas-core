@@ -11,7 +11,7 @@ import MFS from 'memory-fs';
 import chokidar from 'chokidar';
 import template from 'lodash.template';
 import {emptyDir, readFile, outputFile, pathExists, copy} from 'fs-extra';
-import {join} from 'path';
+import {join, posix} from 'path';
 
 import historyMiddleware from 'connect-history-api-fallback';
 import webpackDevMiddleware from 'webpack-dev-middleware';
@@ -196,7 +196,7 @@ export default class Builder {
     /**
      * write config.json which will be used in prod mode
      *
-     * @param {Object} config
+     * @param {Object} config config
      */
     async writeConfigFile(config) {
         let configFilePath = distLavasPath(config.build.path, CONFIG_FILE);
@@ -234,7 +234,7 @@ export default class Builder {
     /**
      * add skeleton routes in development mode
      *
-     * @param {object} clientConfig webpack client config
+     * @param {Object} clientConfig webpack client config
      */
     addSkeletonRoutes(clientConfig) {
         let {globals: {rootDir}, entry} = this.config;
@@ -260,8 +260,8 @@ export default class Builder {
      * set chokidar watchers, following directories and files will be watched:
      * /pages, /config, /entries/[entry]/index.html.tmpl
      *
-     * @param {string|Array.<string>} paths
-     * @param {string|Array.<string>} events
+     * @param {string|Array.<string>} paths paths
+     * @param {string|Array.<string>} events events
      * @param {Function} callback callback
      */
     addWatcher(paths, events, callback) {
@@ -308,6 +308,7 @@ export default class Builder {
         let clientCompiler; // compiler for client in ssr and mpa
         let serverCompiler; // compiler for server in ssr
         let clientMFS;
+        let noop = () => {};
 
         await this.routeManager.buildRoutes();
         await this.writeLavasLink();
@@ -369,7 +370,7 @@ export default class Builder {
 
         hotMiddleware = webpackHotMiddleware(clientCompiler, {
             heartbeat: 5000,
-            log: () => {}
+            log: noop
         });
         /**
          * TODO: hot reload for html
@@ -379,7 +380,7 @@ export default class Builder {
          * before the problem solved, there's no page reload
          * when the html-webpack-plugin template changes in webpack 3.x
          */
-        clientCompiler.plugin('compilation', (compilation) => {
+        clientCompiler.plugin('compilation', compilation => {
             compilation.plugin('html-webpack-plugin-after-emit', (data, cb) => {
                 // trigger reload action, which will be used in hot-reload-client.js
                 hotMiddleware.publish({
@@ -398,10 +399,10 @@ export default class Builder {
             let mpaEntries = this.config.entry.filter(e => !e.ssr);
             let rewrites = mpaEntries
                 .map(entry => {
-                    let {name, routes} = entry;
+                    let {name, routes, base} = entry;
                     return {
                         from: routes2Reg(routes),
-                        to: `/${name}.html`
+                        to: posix.join(base, `/${name}.html`)
                     };
                 });
             /**
