@@ -111,7 +111,7 @@ export default class LavasCore extends EventEmitter {
      * @return {Function} koa middleware
      */
     koaMiddleware() {
-        let {build: {publicPath}, serviceWorker} = this.config;
+        let {entry, build: {publicPath}, serviceWorker} = this.config;
         let ssrExists = entry.some(e => e.ssr);
 
         // transform express/connect style middleware to koa style
@@ -139,9 +139,10 @@ export default class LavasCore extends EventEmitter {
 
             // serve sw-register.js & sw.js
             let swFiles = [
-                posix.join(publicPath, serviceWorker.filename),
-                posix.join(publicPath, 'sw-register.js')
-            ];
+                'workbox-sw.prod.v2.1.0.js',
+                serviceWorker.filename,
+                'sw-register.js'
+            ].map(f => posix.join(publicPath, f));
             middlewares.push(async (ctx, next) => {
                 let done = false;
                 if (swFiles.includes(ctx.path)) {
@@ -169,7 +170,7 @@ export default class LavasCore extends EventEmitter {
      * @return {Function} express middleware
      */
     expressMiddleware() {
-        let {build: {publicPath}, serviceWorker} = this.config;
+        let {entry, build: {publicPath}, serviceWorker} = this.config;
         let ssrExists = entry.some(e => e.ssr);
 
         /**
@@ -184,9 +185,10 @@ export default class LavasCore extends EventEmitter {
 
             // serve sw-register.js & sw.js
             let swFiles = [
-                posix.join(publicPath, serviceWorker.filename),
-                posix.join(publicPath, 'sw-register.js')
-            ];
+                'workbox-sw.prod.v2.1.0.js',
+                serviceWorker.filename,
+                'sw-register.js'
+            ].map(f => posix.join(publicPath, f));
         }
 
         return compose([
