@@ -20,11 +20,12 @@ import c2k from 'koa-connect';
 import mount from 'koa-mount';
 import koaStatic from 'koa-static';
 import send from 'koa-send';
+
 import serveStatic from 'serve-static';
 import favicon from 'serve-favicon';
 import compression from 'compression';
 
-import {join, posix} from 'path';
+import {join, posix, basename} from 'path';
 import EventEmitter from 'events';
 
 import {ASSETS_DIRNAME_IN_DIST} from './constants';
@@ -139,8 +140,7 @@ export default class LavasCore extends EventEmitter {
 
             // serve sw-register.js & sw.js
             let swFiles = [
-                'workbox-sw.prod.v2.1.0.js',
-                serviceWorker.filename,
+                basename(serviceWorker.swDest),
                 'sw-register.js'
             ].map(f => posix.join(publicPath, f));
             middlewares.push(async (ctx, next) => {
@@ -185,8 +185,7 @@ export default class LavasCore extends EventEmitter {
 
             // serve sw-register.js & sw.js
             let swFiles = [
-                'workbox-sw.prod.v2.1.0.js',
-                serviceWorker.filename,
+                basename(serviceWorker.swDest),
                 'sw-register.js'
             ].map(f => posix.join(publicPath, f));
         }
