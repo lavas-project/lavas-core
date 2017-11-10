@@ -255,8 +255,8 @@ export default class WebpackConfig {
                 to: ASSETS_DIRNAME_IN_DIST,
                 ignore: ['*.md']
             },
-            // TODO: Copy workbox.dev.js from node_modules manually.
-            ...getWorkboxFiles(false)
+            // Copy workbox.dev|prod.js from node_modules manually.
+            ...getWorkboxFiles(this.isProd)
                 .map(f => {
                     return {
                         from: join(globals.rootDir, `node_modules/workbox-sw/build/importScripts/${f}`),
