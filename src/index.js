@@ -20,7 +20,6 @@ import c2k from 'koa-connect';
 import mount from 'koa-mount';
 import koaStatic from 'koa-static';
 import send from 'koa-send';
-
 import serveStatic from 'serve-static';
 import favicon from 'serve-favicon';
 import compression from 'compression';

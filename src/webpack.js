@@ -243,11 +243,14 @@ export default class WebpackConfig {
                 }),
 
                 // add custom plugins in client side
-                ...clientPlugins,
-
-                new WorkboxWebpackPlugin(workboxConfig)
+                ...clientPlugins
             ]
         });
+
+        // Use workbox in prod mode.
+        if (this.isProd) {
+            clientConfig.plugins.push(new WorkboxWebpackPlugin(workboxConfig));
+        }
 
         clientConfig.plugins.push(new CopyWebpackPlugin([
             {
