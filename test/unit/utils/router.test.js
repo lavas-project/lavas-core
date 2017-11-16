@@ -3,13 +3,13 @@
  * @author panyuqi (pyqiverson@gmail.com)
  */
 
-import {generateRoutes, routes2Reg, matchUrl} from '../../lib/utils/router';
+import {generateRoutes, routes2Reg, matchUrl} from '../../../lib/utils/router';
 import {join} from 'path';
 import test from 'ava';
 
 // generateRoutes()
 test('it should generate routes according to the structure of directory', async t => {
-    let routes = await generateRoutes(join(__dirname, '../fixtures/pages'));
+    let routes = await generateRoutes(join(__dirname, '../../fixtures/pages'));
 
     t.true(routes.length === 5);
 
