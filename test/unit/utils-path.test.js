@@ -4,12 +4,12 @@
  */
 
 import {distLavasPath, assetsPath, resolveAliasPath} from '../../lib/utils/path';
-import {join} from 'path';
+import {join, sep} from 'path';
 import test from 'ava';
 
 // distLavasPath()
 test('it should concat path with lavas directory', t => {
-    t.is('/root/lavas/newpath', distLavasPath('/root', 'newpath'));
+    t.is(['', 'root', 'lavas', 'newpath'].join(sep), distLavasPath('/root', 'newpath'));
 });
 
 // assetsPath()
@@ -22,5 +22,5 @@ test('it should resolve path with webpack alias', t => {
     let alias = {
         '@': '/root'
     };
-    t.is('/root/components/a.vue', resolveAliasPath(alias, '@/components/a.vue'));
+    t.is(['', 'root', 'components', 'a.vue'].join(sep), resolveAliasPath(alias, '@/components/a.vue'));
 });

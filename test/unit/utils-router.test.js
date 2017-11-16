@@ -28,7 +28,7 @@ test('it should generate routes according to the structure of directory', async 
     t.deepEqual(routes[2], {
         path: '/detail/:id',
         component: 'pages/detail/_id.vue',
-        name: 'detail-id'
+        name: 'detailId'
     });
 
     t.deepEqual(routes[3], {

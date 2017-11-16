@@ -13,7 +13,7 @@
     "build": "babel src --out-dir lib --copy-files",
     "lint": "fecs ./ --rule --type 'vue,js,css'",
     "prepublish": "npm run build",
-    "test": "npm run build && ./node_modules/.bin/nyc ava"
+    "test": "npm run build && ava"
   },
   "ava": {
     "concurrency": 1,
