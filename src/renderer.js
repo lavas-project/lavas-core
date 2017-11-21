@@ -52,7 +52,6 @@ export default class Renderer {
         if (!await pathExists(templatePath)) {
             throw new Error(`${templatePath} required for entry: ${entryName}`);
         }
-
         return templateUtil.server(
             await readFile(templatePath, 'utf8'),
             baseUrl
@@ -118,7 +117,6 @@ export default class Renderer {
                     this.config.build.path,
                     `${entryName}/${this.getTemplateName(entryName)}`
                 );
-
                 await outputFile(distTemplatePath, templateContent);
             }
         }));

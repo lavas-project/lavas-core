@@ -11,6 +11,7 @@ import {join} from 'path';
 import {createHash} from 'crypto';
 import serialize from 'serialize-javascript';
 import template from 'lodash.template';
+import pathToRegexp from 'path-to-regexp';
 
 import {generateRoutes, matchUrl} from './utils/router';
 import {writeFileInDev} from './utils/webpack';
@@ -73,11 +74,11 @@ export default class RouteManager {
      */
     mergeWithConfig(routes, routesConfig = [], rewriteRules = [], parentPath = '') {
         /**
-         * in dev mode, we need to add timestamp to every route's hash as prefix.
+         * In dev mode, we need to add timestamp to every route's hash as prefix.
          * otherwise when we change the code in page.vue, route's hash remains the same,
          * webpack hot middleware will throw a "Duplicate declaration" error.
          */
-        let timestamp = (new Date()).getTime();
+        let timestamp = this.isDev ? (new Date()).getTime() : '';
 
         routes.forEach(route => {
 
@@ -139,7 +140,7 @@ export default class RouteManager {
              */
             route.pathRegExp = route.path === '*'
                 ? /^.*$/
-                : new RegExp(`^${route.path.replace(/\/:[^\/]*/g, '/[^\/]+')}\/?`);
+                : pathToRegexp(route.path);
 
             // merge recursively
             if (route.children && route.children.length) {
@@ -172,10 +173,14 @@ export default class RouteManager {
             }
 
             let childrenContent = '';
+            let aliasContent = '';
             if (cur.children) {
                 childrenContent = `children: [
                     ${this.generateRoutesContent(cur.children, true)}
                 ]`;
+            }
+            if (cur.alias) {
+                aliasContent = `alias: '${cur.alias}',`;
             }
 
             return prev + `{
@@ -183,6 +188,8 @@ export default class RouteManager {
                 name: '${cur.name}',
                 component: _${cur.hash},
                 meta: ${JSON.stringify(cur.meta || {})},
+                ${aliasContent}
+                pathToRegexpOptions: { strict: true },
                 ${childrenContent}
             },`;
         }, '');

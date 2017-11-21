@@ -11,18 +11,18 @@ import test from 'ava';
 test('it should generate routes according to the structure of directory', async t => {
     let routes = await generateRoutes(join(__dirname, '../../fixtures/pages'));
 
-    t.true(routes.length === 5);
+    t.true(routes.length === 4);
 
     t.deepEqual(routes[0], {
-        path: '/404',
-        component: 'pages/404.vue',
-        name: '404'
+        path: '/detail/:id',
+        component: 'pages/detail/_id.vue',
+        name: 'detailId'
     });
 
     t.deepEqual(routes[1], {
-        path: '/500',
-        component: 'pages/500.vue',
-        name: '500'
+        path: '/error',
+        component: 'pages/Error.vue',
+        name: 'error'
     });
 
     t.deepEqual(routes[2], {
@@ -38,7 +38,7 @@ test('it should generate routes according to the structure of directory', async 
     });
 
     // nested routes
-    t.deepEqual(routes[4], {
+    t.deepEqual(routes[3], {
         path: '/parent',
         component: 'pages/Parent.vue',
         name: 'parent',

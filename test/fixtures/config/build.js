@@ -60,18 +60,37 @@ module.exports = {
     bundleAnalyzerReport: false,
 
     /**
+     * webpack.DefinePlugin
+     *
+     * @type {Object.<string, Object>}
+     */
+    defines: {
+        base: {},
+        client: {},
+        server: {}
+    },
+
+    /**
      * alias for webpack
      *
-     * @type {Object.<string, string>}
+     * @type {Object.<string, Object>}
      */
-    alias: {},
+    alias: {
+        base: {},
+        client: {},
+        server: {}
+    },
 
     /**
      * webpack plugins
      *
-     * @type {Array.<*>}
+     * @type {Object.<string, Array.<*>>}
      */
-    plugins: [],
+    plugins: {
+        base: [],
+        client: [],
+        server: []
+    },
 
     /**
      * node externals
