@@ -1,5 +1,5 @@
 /**
- * @file test case for utils/router.js
+ * @file test case for utils/path.js
  * @author panyuqi (pyqiverson@gmail.com)
  */
 
