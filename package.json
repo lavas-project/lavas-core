@@ -19,6 +19,9 @@
     "concurrency": 1,
     "failFast": true,
     "files": [
+      "test/integration/*"
+    ],
+    "backupFiles": [
       "test/unit/config-reader.test.js",
       "test/unit/utils/*"
     ],
