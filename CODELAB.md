@@ -16,7 +16,7 @@ Lavas 是一套基于 Vue 的 PWA 解决方案，可以帮助开发者快速搭�
 
 * 如何使用更新后的 Lavas 命令行工具创建 Lavas 2.0 项目
 * 如何开发 Lavas 2.0 项目
-* 如何更好的支持 SSR 下的 AppShell 模型 （__和 Lavas 无关的技术解决方案__）
+* 如何更好的支持 SSR 下的 AppShell 模型 （__和 Lavas 无关的通用技术解决方案__）
 
 ## 学习本教程前您应该掌握
 
@@ -101,6 +101,71 @@ npm run dev
 打开浏览器，访问 `http://localhost:3000/` 可以看到页面效果。
 
 # 4. 创建第二个页面和链接
+
+一个站点只有一个首页显然是不行的，让我们再创建一个页面。这次我们试图创建一个附带__动态参数__的页面。
+
+## 创建页面
+
+之前提过，Lavas 2.0 的一大改进点是根据页面所处文件位置自动生成路由规则。这里让我们创建一个文章详情页面，它的访问路由为 `/detail/[id]`  ([id] 表示动态参数，一般来说是数字，如 `/detail/1` 即访问 id=1 的文章)。那么我们需要在 `pages` 目录中创建一个子目录 `detail`， 并在其中创建一个 vue 源文件 `_id.vue`， 内容如下：
+
+```
+<template>
+    <div class="detail-wrapper">
+        <article class="detail-content text-xs-center">
+            <header class="detail-title text-xs-center">
+                Detail {{$route.params.id}}
+            </header>
+            <!-- link to another detail -->
+            <p>
+            Progressive Web Apps are user experiences that have the reach of the web, and are:
+Reliable - Load instantly and never show the downasaur, even in uncertain network conditions.
+Fast - Respond quickly to user interactions with silky smooth animations and no janky scrolling.
+            </p>
+            <!-- link to index -->
+        </article>
+    </div>
+</template>
+
+<script>
+export default {
+    name: 'detail-_id',
+    head() {
+        return {
+            title: `Detail ${this.$route.params.id}`,
+            titleTemplate: '%s - Lavas',
+            meta: [
+                {name: 'keywords', content: `detail ${this.$route.params.id}`},
+                {name: 'description', content: `detail ${this.$route.params.id}`}
+            ]
+        };
+    }
+};
+</script>
+
+<style lang="stylus" scoped>
+.detail-content
+    font-size 16px
+    line-height 30px
+    margin-top 30px
+
+    .detail-title
+        margin-bottom 20px
+        padding 10px 0
+        font-size 36px
+        font-weight bold
+
+</style>
+```
+
+从文件名称来看，Lavas 2.0 约定 以下划线开头的 vue 文件是包含动态参数的页面，除了首字母不用大写之外 (因为第一个也不是字母)，下划线后面的内容 (如例子中的 `id`) 即为动态参数的名称。
+
+从文件内容来看，让我们先忽略其中的两条 link 相关的注释。除了普通的页面内容之外，我们注意到在 `<template>` 和 `<script>` 中分别出现了 `{{$route.params.id}}` 和 `this.route.params.id`，这便是 Lavas 2.0 解析了 URL 之后产出动态参数的获取方式。举例来说，当用户访问 `/detail/1`，则这两个变量的值都是 `1`。
+
+保存文件，使用 `npm run dev` 启动项目之后，通过浏览器访问 `http://localhost:3000/detail/1` 即可访问到这个新增的第二个页面。当然你还可以尝试输入其他 id 来观察两处动态参数 (页面头部和 meta 信息) 的变化。
+
+## 创建链接
+
+这里我们来尝试在两个页面之间添加一些链接。开发者当然可以使用 `<a>` 标签或者 vue 提供的 `<router-link>`
 
 # 5. 创建第二个入口
 
