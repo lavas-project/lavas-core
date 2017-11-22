@@ -1,6 +1,6 @@
 {
   "name": "lavas-core",
-  "version": "0.0.33",
+  "version": "0.0.35",
   "description": "lavas core",
   "author": "lavas",
   "main": "lib/index.js",
@@ -13,7 +13,7 @@
     "build": "babel src --out-dir lib --copy-files",
     "lint": "fecs ./ --rule --type 'vue,js,css'",
     "prepublish": "npm run build",
-    "test": "ava"
+    "test": "npm run build && ava"
   },
   "ava": {
     "concurrency": 1,

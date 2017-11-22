@@ -53,6 +53,7 @@ const DEFAULT_CONFIG = {
         babelrc: false
     },
     entry: [],
+    router: {},
     errorHandler: {
         target: '/500',
         statusCode: {
@@ -70,6 +71,7 @@ const DEFAULT_CONFIG = {
         server: [],
         client: []
     },
+    serviceWorker: null,
     production: {
         build: {
             cssExtract: true
@@ -109,22 +111,18 @@ export default class ConfigReader {
             buildVersion: Date.now()
         });
 
+        if (config[this.env]) {
+            merge(config, config[this.env]);
+        }
+
         // read from lavas.config.js
         let singleConfigPath = join(this.cwd, LAVAS_CONFIG_FILE);
         if (await pathExists(singleConfigPath)) {
             console.log('[Lavas] read lavas.config.js.');
             delete require.cache[require.resolve(singleConfigPath)];
-            let configFunc = await import(singleConfigPath);
-            if (!isFunction(configFunc)) {
-                throw new Error('[Lavas] lavas.config.js must return a function.');
-            }
-            merge(config, configFunc(this.env));
+            merge(config, await import(singleConfigPath));
         }
         else {
-            if (config[this.env]) {
-                merge(config, config[this.env]);
-            }
-
             let configDir = join(this.cwd, 'config');
             let files = glob.sync(
                 '**/*.js', {
