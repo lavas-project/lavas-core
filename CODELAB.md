@@ -563,6 +563,8 @@ lavas start
 
 来以线上模式运行项目。线上模式的所有代码均为压缩后的，并且 Service Worker 也会生效 (使用 localhost 访问即可)。
 
+![lavas-start](http://boscdn.bpc.baidu.com/assets/lavas/codelab/lavas-start.png)
+
 # 11. 修改渲染方式 (扩展)
 
 # 12. 使用 Koa (扩展)
